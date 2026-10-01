@@ -267,6 +267,16 @@ class _TimerPageState extends State<TimerPage>
         ? formatRemaining(_minutes(_totalCtl.text) ?? _total)
         : formatRemaining(_remaining);
     final student = 'Student #${_log.length + 1}';
+    final clock = FittedBox(
+      child: Text(
+        time,
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.bold,
+          fontFeatures: [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
     return AnimatedBuilder(
       animation: _blink,
       builder: (context, child) => Scaffold(
@@ -275,31 +285,27 @@ class _TimerPageState extends State<TimerPage>
           Phase.warning => Color.lerp(_calm, _amber, _blink.value),
           Phase.done => Color.lerp(Colors.black, _red, _blink.value),
         },
-        body: child,
+        // Setup: one compact block centred both ways, scrolls if it doesn't fit.
+        // Running: the clock fills the screen.
+        body: _idle
+            ? Center(child: SingleChildScrollView(child: child))
+            : SizedBox.expand(child: child),
       ),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
+            mainAxisSize: _idle ? MainAxisSize.min : MainAxisSize.max,
             children: [
               Text(
                 _idle ? student : '${_inQa ? 'Q&A' : 'Talk'} · $student',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              Expanded(
-                child: FittedBox(
-                  child: Text(
-                    time,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontFeatures: [FontFeature.tabularFigures()],
-                    ),
-                  ),
-                ),
-              ),
-              if (_idle)
-                Flexible(child: SingleChildScrollView(child: _setup())),
+              if (_idle) ...[
+                SizedBox(height: 140, child: clock),
+                _setup(),
+              ] else
+                Expanded(child: clock),
               const SizedBox(height: 16),
               Wrap(
                 spacing: 16,
