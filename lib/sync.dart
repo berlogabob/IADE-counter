@@ -13,9 +13,10 @@ import 'session.dart';
 /// No `dart:io`: `HttpDate`/`HttpHeaders` live there, and the web build rejects
 /// it, so we use literal header names and a small RFC 7231 date parser instead.
 class Sync {
-  Sync(this.token);
+  Sync(this.token, {http.Client? client}) : _http = client ?? http.Client();
   static const worker = 'https://iade-sync.counter-iade.workers.dev';
   final String token;
+  final http.Client _http;
 
   int offsetMs = 0; // server clock minus local clock
   String? _etag;
@@ -31,7 +32,7 @@ class Sync {
     try {
       final headers = <String, String>{};
       if (_etag != null) headers['if-none-match'] = _etag!;
-      final resp = await http.get(Uri.parse(_url), headers: headers);
+      final resp = await _http.get(Uri.parse(_url), headers: headers);
 
       if (resp.statusCode == 304) return null;
       if (resp.statusCode != 200) return null;
@@ -55,7 +56,7 @@ class Sync {
   /// running offline; a failed push is not a failure.
   Future<void> putText(String text) async {
     try {
-      await http.put(
+      await _http.put(
         Uri.parse(_url),
         headers: {'content-type': 'text/plain'},
         body: text,
