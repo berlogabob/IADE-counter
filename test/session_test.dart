@@ -2,6 +2,49 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iade_counter/session.dart';
 
 void main() {
+  test('parseRoute: /admin is the admin role with no tokens', () {
+    final r = parseRoute('/admin');
+    expect(r.role, 'admin');
+    expect(r.tokens, isEmpty);
+  });
+
+  test('parseRoute: /host with one (edit) token', () {
+    final r = parseRoute('/host/ABC123');
+    expect(r.role, 'host');
+    expect(r.tokens, ['ABC123']);
+  });
+
+  test('parseRoute: /host with two (edit, notes) tokens, in order', () {
+    final r = parseRoute('/host/ab/cd');
+    expect(r.role, 'host');
+    expect(r.tokens, ['ab', 'cd']);
+  });
+
+  test('parseRoute: /host with three (edit, notes, read) tokens, in order', () {
+    final r = parseRoute('/host/ab/cd/EF');
+    expect(r.role, 'host');
+    expect(r.tokens, ['ab', 'cd', 'EF']);
+  });
+
+  test('parseRoute: /view with one (read) token', () {
+    final r = parseRoute('/view/xyz789');
+    expect(r.role, 'viewer');
+    expect(r.tokens, ['xyz789']);
+  });
+
+  test('parseRoute: a non-alphanumeric token segment makes it standalone', () {
+    expect(parseRoute('/host/AB-CD').role, 'standalone');
+    expect(parseRoute('/host/AB-CD').tokens, isEmpty);
+    expect(parseRoute('/view/ab-cd').role, 'standalone');
+  });
+
+  test('parseRoute: empty, empty segments and unknown fragments are standalone', () {
+    expect(parseRoute('').role, 'standalone');
+    expect(parseRoute('/host/').role, 'standalone');
+    expect(parseRoute('/view/').role, 'standalone');
+    expect(parseRoute('?total=15').role, 'standalone');
+  });
+
   test('toJson/fromJson roundtrip equals', () {
     const s = Snapshot(
       endMs: 1_700_000_000_000,

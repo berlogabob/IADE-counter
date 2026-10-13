@@ -9,56 +9,55 @@ import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import 'admin.dart';
 import 'phase.dart';
 import 'session.dart';
 import 'sync.dart';
 import 'wheel.dart';
 
 void main() {
-  // Route by URL fragment: /host/<token> drives the host, /view/<token> a
-  // mirror of it; anything else is today's standalone timer (no Sync).
-  final route = Uri.base.fragment;
-  String? token;
-  String? notesToken;
-  if (route.startsWith('/host/')) {
-    // /host/<token> or /host/<token>/<notesToken> (notes are a second share).
-    final rest = route.substring('/host/'.length);
-    final slash = rest.indexOf('/');
-    if (slash == -1) {
-      token = rest;
-    } else {
-      token = rest.substring(0, slash);
-      notesToken = rest.substring(slash + 1);
-    }
-  } else if (route.startsWith('/view/')) {
-    // The viewer route never carries a notes token.
-    token = route.substring('/view/'.length);
-  }
-  final viewer = route.startsWith('/view/');
+  // Route by URL fragment: /admin opens the admin page, /host/<edit>[/<notes>]
+  // [/<read>] drives the host, /view/<read> a mirror of it; anything else is
+  // the standalone timer (no Sync). parseRoute rejects a non-alphanumeric
+  // token segment and falls back to standalone for the whole route.
+  final parsed = parseRoute(Uri.base.fragment);
   runApp(
     MaterialApp(
       title: 'Defence Timer',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(useMaterial3: true),
-      home: token == null
-          ? const TimerPage()
+      home: parsed.role == 'admin'
+          ? const AdminPage()
           : TimerPage(
-              sync: Sync(token),
-              notesSync: notesToken == null ? null : Sync(notesToken),
-              viewer: viewer,
+              sync: parsed.tokens.isNotEmpty ? Sync(parsed.tokens[0]) : null,
+              notesSync: parsed.tokens.length > 1
+                  ? Sync(parsed.tokens[1])
+                  : null,
+              readToken: parsed.tokens.length > 2 ? parsed.tokens[2] : null,
+              viewer: parsed.role == 'viewer',
             ),
     ),
   );
 }
 
 class TimerPage extends StatefulWidget {
-  const TimerPage({super.key, this.sync, this.notesSync, this.viewer = false});
+  const TimerPage({
+    super.key,
+    this.sync,
+    this.notesSync,
+    this.readToken,
+    this.viewer = false,
+  });
 
   /// Null for the standalone timer; set for host (push) and viewer (mirror).
   final Sync? sync;
 
   /// Null unless the host URL carries a second notes share token.
   final Sync? notesSync;
+
+  /// The read-only (viewer) share token when the host URL carried a third
+  /// segment; the viewer URL uses this in preference to the edit token.
+  final String? readToken;
 
   /// True when mirroring a host's timer rather than running one.
   final bool viewer;
@@ -154,7 +153,9 @@ class _TimerPageState extends State<TimerPage>
   /// Host only: show a QR (and the URL) a viewer can scan to mirror this timer.
   void _shareLink() {
     final url = Uri.base
-        .replace(fragment: '/view/${widget.sync!.token}')
+        .replace(
+          fragment: '/view/${widget.readToken ?? widget.sync!.token}',
+        )
         .toString();
     showDialog(
       context: context,

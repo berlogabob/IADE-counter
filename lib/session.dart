@@ -242,3 +242,34 @@ class Snapshot {
     return Duration(milliseconds: inQa ? qaMs : totalMs);
   }
 }
+
+/// The role and share tokens a page URL fragment selects.
+///
+/// [role] is one of `admin`, `host`, `viewer` or `standalone`; [tokens] carries
+/// the share tokens in route order for the host/viewer roles and is empty for
+/// the others.
+({String role, List<String> tokens}) parseRoute(String fragment) {
+  // A single token is alphanumeric only; anything else falls back to the
+  // standalone timer rather than guessing.
+  final tokenRe = RegExp(r'^[A-Za-z0-9]+$');
+
+  if (fragment == '/admin') return (role: 'admin', tokens: const []);
+
+  if (fragment.startsWith('/host/')) {
+    final segments = fragment.substring('/host/'.length).split('/');
+    final tokens = <String>[];
+    for (final seg in segments) {
+      if (!tokenRe.hasMatch(seg)) return (role: 'standalone', tokens: const []);
+      tokens.add(seg);
+    }
+    return (role: 'host', tokens: tokens);
+  }
+
+  if (fragment.startsWith('/view/')) {
+    final token = fragment.substring('/view/'.length);
+    if (!tokenRe.hasMatch(token)) return (role: 'standalone', tokens: const []);
+    return (role: 'viewer', tokens: [token]);
+  }
+
+  return (role: 'standalone', tokens: const []);
+}
