@@ -7,18 +7,39 @@ import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'phase.dart';
+import 'session.dart';
+import 'sync.dart';
 
-void main() => runApp(
-  MaterialApp(
-    title: 'Defence Timer',
-    debugShowCheckedModeBanner: false,
-    theme: ThemeData.dark(useMaterial3: true),
-    home: const TimerPage(),
-  ),
-);
+void main() {
+  // Route by URL fragment: /host/<token> drives the host, /view/<token> a
+  // mirror of it; anything else is today's standalone timer (no Sync).
+  final route = Uri.base.fragment;
+  final token = route.startsWith('/host/')
+      ? route.substring('/host/'.length)
+      : route.startsWith('/view/')
+      ? route.substring('/view/'.length)
+      : null;
+  final viewer = route.startsWith('/view/');
+  runApp(
+    MaterialApp(
+      title: 'Defence Timer',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(useMaterial3: true),
+      home: token == null
+          ? const TimerPage()
+          : TimerPage(sync: Sync(token), viewer: viewer),
+    ),
+  );
+}
 
 class TimerPage extends StatefulWidget {
-  const TimerPage({super.key});
+  const TimerPage({super.key, this.sync, this.viewer = false});
+
+  /// Null for the standalone timer; set for host (push) and viewer (mirror).
+  final Sync? sync;
+
+  /// True when mirroring a host's timer rather than running one.
+  final bool viewer;
 
   @override
   State<TimerPage> createState() => _TimerPageState();
@@ -39,6 +60,10 @@ class _TimerPageState extends State<TimerPage>
   final _qaCtl = TextEditingController(text: _preset('qa', '10'));
   final _player = AudioPlayer();
   late final _blink = AnimationController(vsync: this);
+
+  Timer? _sync; // viewer: 1s poll of the host
+  Timer? _pushTimer; // host: 5s push while running
+  int _rev = -1; // viewer: last snapshot rev applied
 
   Duration _total = const Duration(minutes: 15);
   Duration _warn = const Duration(minutes: 1);
@@ -103,15 +128,21 @@ class _TimerPageState extends State<TimerPage>
     WakelockPlus.enable();
     _ticker?.cancel();
     _ticker = Timer.periodic(const Duration(milliseconds: 200), (_) => _tick());
+    _push();
+    _pushTimer?.cancel();
+    // Push periodically so a viewer recovers mid-run after a refresh.
+    _pushTimer = Timer.periodic(const Duration(seconds: 5), (_) => _push());
   }
 
   void _pause() {
     _ticker?.cancel();
     WakelockPlus.disable();
+    _pushTimer?.cancel();
     setState(() {
       _paused = _remaining;
       _end = null;
     });
+    _push();
   }
 
   void _stopEffects() {
@@ -139,12 +170,35 @@ class _TimerPageState extends State<TimerPage>
   void _reset() {
     _ticker?.cancel();
     WakelockPlus.disable();
+    _pushTimer?.cancel();
     _stopEffects();
     setState(() {
       _end = null;
       _paused = null;
       _inQa = false;
     });
+    _push();
+  }
+
+  /// Serialise the current fields into a [Snapshot] and push it. No-op for a
+  /// standalone timer; failures are swallowed so the host keeps running offline.
+  void _push() {
+    final sync = widget.sync;
+    if (sync == null) return;
+    final s = Snapshot(
+      // ignore: prefer_null_aware_operators - the '?.' form can't carry the '+ offsetMs' addition
+      endMs: _end == null ? null : _end!.millisecondsSinceEpoch + sync.offsetMs,
+      pausedMs: _paused?.inMilliseconds,
+      inQa: _inQa,
+      totalMs: _total.inMilliseconds,
+      warnMs: _warn.inMilliseconds,
+      qaMs: _qa.inMilliseconds,
+      student: _log.length + 1,
+      log: List<String>.from(_log),
+      rev: DateTime.now()
+          .millisecondsSinceEpoch, // unique per push, survives host reload
+    );
+    sync.push(s);
   }
 
   void _tick() {
@@ -185,8 +239,63 @@ class _TimerPageState extends State<TimerPage>
   }
 
   @override
+  void initState() {
+    super.initState();
+    if (widget.viewer && widget.sync != null) {
+      _startSync();
+    } else {
+      widget.sync
+          ?.poll(); // host: learn the server clock offset before the first push
+    }
+  }
+
+  /// Viewer: poll the host every second and mirror a new snapshot (rev changed).
+  void _startSync() {
+    _sync = Timer.periodic(const Duration(seconds: 1), (_) async {
+      final s = await widget.sync?.poll();
+      if (s == null || s.rev == _rev) return;
+      _rev = s.rev;
+      setState(() {
+        // A new talk/Q&A or a reset ends the previous alert colour and sound.
+        if (s.inQa != _inQa || (s.endMs == null && s.pausedMs == null)) {
+          _stopEffects();
+        }
+        _total = Duration(milliseconds: s.totalMs);
+        _warn = Duration(milliseconds: s.warnMs);
+        _qa = Duration(milliseconds: s.qaMs);
+        _inQa = s.inQa;
+        _end = s.endMs == null
+            ? null
+            : DateTime.fromMillisecondsSinceEpoch(
+                s.endMs! - widget.sync!.offsetMs, // server clock -> local clock
+              );
+        _paused = s.pausedMs == null
+            ? null
+            : Duration(milliseconds: s.pausedMs!);
+        _log
+          ..clear()
+          ..addAll(s.log);
+        if (_end != null || _paused != null) {
+          _ticker?.cancel();
+          _ticker = Timer.periodic(
+            const Duration(milliseconds: 200),
+            (_) => _tick(),
+          );
+          WakelockPlus.enable();
+        } else {
+          _ticker?.cancel();
+          _ticker = null;
+          WakelockPlus.disable();
+        }
+      });
+    });
+  }
+
+  @override
   void dispose() {
     _ticker?.cancel();
+    _sync?.cancel();
+    _pushTimer?.cancel();
     _blink.dispose();
     _player.dispose();
     _totalCtl.dispose();
@@ -287,68 +396,79 @@ class _TimerPageState extends State<TimerPage>
         },
         // Setup: one compact block centred both ways, scrolls if it doesn't fit.
         // Running: the clock fills the screen.
-        body: _idle
-            ? Center(child: SingleChildScrollView(child: child))
-            : SizedBox.expand(child: child),
+        body: (widget.viewer || !_idle)
+            ? SizedBox.expand(child: child)
+            : Center(child: SingleChildScrollView(child: child)),
       ),
       child: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisSize: _idle ? MainAxisSize.min : MainAxisSize.max,
+            mainAxisSize: (_idle && !widget.viewer)
+                ? MainAxisSize.min
+                : MainAxisSize.max,
             children: [
               Text(
                 _idle ? student : '${_inQa ? 'Q&A' : 'Talk'} · $student',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
-              if (_idle) ...[
+              if (widget.viewer || !_idle)
+                Expanded(child: clock)
+              else
                 SizedBox(height: 140, child: clock),
-                _setup(),
-              ] else
-                Expanded(child: clock),
+              if (_idle && !widget.viewer) _setup(),
               const SizedBox(height: 16),
-              Wrap(
-                spacing: 16,
-                runSpacing: 8,
-                alignment: WrapAlignment.center,
-                children: [
-                  if (_end == null)
-                    FilledButton.icon(
-                      onPressed: _start,
-                      icon: const Icon(Icons.play_arrow),
-                      label: Text(_idle ? 'Start' : 'Resume'),
-                    )
-                  else
-                    FilledButton.icon(
-                      onPressed: _pause,
-                      icon: const Icon(Icons.pause),
-                      label: const Text('Pause'),
-                    ),
-                  if (!_idle) ...[
-                    if (!_inQa && _qa > Duration.zero)
-                      FilledButton.tonalIcon(
-                        onPressed: _startQa,
-                        icon: const Icon(Icons.question_answer),
-                        label: const Text('Q&A'),
+              if (widget.viewer) _logBlock(),
+              if (!widget.viewer)
+                Wrap(
+                  spacing: 16,
+                  runSpacing: 8,
+                  alignment: WrapAlignment.center,
+                  children: [
+                    if (_end == null)
+                      FilledButton.icon(
+                        onPressed: _start,
+                        icon: const Icon(Icons.play_arrow),
+                        label: Text(_idle ? 'Start' : 'Resume'),
                       )
                     else
-                      FilledButton.tonalIcon(
-                        onPressed: _nextStudent,
-                        icon: const Icon(Icons.skip_next),
-                        label: const Text('Next student'),
+                      FilledButton.icon(
+                        onPressed: _pause,
+                        icon: const Icon(Icons.pause),
+                        label: const Text('Pause'),
                       ),
-                    OutlinedButton.icon(
-                      onPressed: _reset,
-                      icon: const Icon(Icons.restart_alt),
-                      label: const Text('Reset'),
-                    ),
+                    if (!_idle) ...[
+                      if (!_inQa && _qa > Duration.zero)
+                        FilledButton.tonalIcon(
+                          onPressed: _startQa,
+                          icon: const Icon(Icons.question_answer),
+                          label: const Text('Q&A'),
+                        )
+                      else
+                        FilledButton.tonalIcon(
+                          onPressed: _nextStudent,
+                          icon: const Icon(Icons.skip_next),
+                          label: const Text('Next student'),
+                        ),
+                      OutlinedButton.icon(
+                        onPressed: _reset,
+                        icon: const Icon(Icons.restart_alt),
+                        label: const Text('Reset'),
+                      ),
+                    ],
                   ],
-                ],
-              ),
+                ),
             ],
           ),
         ),
       ),
     );
+  }
+
+  /// The host's session log, or nothing when empty. Used standalone and by
+  /// viewers (who never see the setup fields or buttons).
+  Widget _logBlock() {
+    if (_log.isEmpty) return const SizedBox.shrink();
+    return Text(_log.join('\n'));
   }
 }
