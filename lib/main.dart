@@ -153,9 +153,7 @@ class _TimerPageState extends State<TimerPage>
   /// Host only: show a QR (and the URL) a viewer can scan to mirror this timer.
   void _shareLink() {
     final url = Uri.base
-        .replace(
-          fragment: '/view/${widget.readToken ?? widget.sync!.token}',
-        )
+        .replace(fragment: '/view/${widget.readToken ?? widget.sync!.token}')
         .toString();
     showDialog(
       context: context,
