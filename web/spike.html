@@ -2,10 +2,12 @@
 <pre id=o>running…</pre>
 <script>
 // usage: spike.html#<workerUrl>|<shareToken>   e.g. #https://iade-sync.x.workers.dev|AbC123
-const [base, token] = decodeURIComponent(location.hash.slice(1)).split('|');
+// defaults = test worker + throwaway test share; the #worker|token hash overrides
+const [base = 'https://iade-sync.counter-iade.workers.dev', token = 'LnfqGMop8n3ktyt'] = decodeURIComponent(location.hash.slice(1)).split('|').filter(Boolean);
 const u = `${base}/public.php/dav/files/${token}`;
 const log = s => document.getElementById('o').textContent += '\n' + s;
 (async () => {
+  log('URL ' + u);
   const body = JSON.stringify({ t: Date.now() });
   const put = await fetch(u, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
   log(`PUT ${put.status}`);
