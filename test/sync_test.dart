@@ -41,4 +41,24 @@ void main() {
         DateTime.now().millisecondsSinceEpoch;
     expect(s.offsetMs, closeTo(expected, 2000));
   });
+
+  test('poll returns null on non-JSON body', () async {
+    final s = Sync(
+      't',
+      client: MockClient(
+        (_) async => http.Response('not json', 200),
+      ),
+    );
+    expect(await s.poll(), isNull);
+  });
+
+  test('poll returns null on malformed JSON', () async {
+    final s = Sync(
+      't',
+      client: MockClient(
+        (_) async => http.Response('{"endMs":"x"}', 200),
+      ),
+    );
+    expect(await s.poll(), isNull);
+  });
 }

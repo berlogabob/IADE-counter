@@ -69,7 +69,11 @@ class Sync {
   Future<Snapshot?> poll() async {
     final body = await getText();
     if (body == null) return null;
-    return Snapshot.fromJson(jsonDecode(body) as Map<String, dynamic>);
+    try {
+      return Snapshot.fromJson(jsonDecode(body) as Map<String, dynamic>);
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> push(Snapshot s) async => putText(jsonEncode(s.toJson()));
