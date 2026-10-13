@@ -4,6 +4,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'phase.dart';
@@ -97,6 +98,40 @@ class _TimerPageState extends State<TimerPage>
   void _copy(String text) {
     Clipboard.setData(ClipboardData(text: text));
     _snack('Copied');
+  }
+
+  /// Host only: show a QR (and the URL) a viewer can scan to mirror this timer.
+  void _shareLink() {
+    final url = Uri.base
+        .replace(fragment: '/view/${widget.sync!.token}')
+        .toString();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Viewer link'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            QrImageView(data: url, backgroundColor: Colors.white, size: 260),
+            SelectableText(url),
+          ],
+        ),
+        actions: [
+          TextButton.icon(
+            onPressed: () {
+              _copy(url);
+              Navigator.of(context).pop();
+            },
+            icon: const Icon(Icons.content_copy),
+            label: const Text('Copy link'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _start() {
@@ -425,6 +460,12 @@ class _TimerPageState extends State<TimerPage>
                   runSpacing: 8,
                   alignment: WrapAlignment.center,
                   children: [
+                    if (widget.sync != null)
+                      TextButton.icon(
+                        onPressed: _shareLink,
+                        icon: const Icon(Icons.qr_code),
+                        label: const Text('Viewer link'),
+                      ),
                     if (_end == null)
                       FilledButton.icon(
                         onPressed: _start,
