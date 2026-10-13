@@ -105,6 +105,9 @@ class Snapshot {
     this.groups = const [],
     this.gi = 0,
     this.si = 0,
+    this.spinAtMs,
+    this.spinWinner = 0,
+    this.breakEndMs,
     this.rev = 0,
   });
 
@@ -131,6 +134,15 @@ class Snapshot {
   /// Index of the current student within its group.
   final int si;
 
+  /// Epoch ms the roulette spin started, while the wheel is animating.
+  final int? spinAtMs;
+
+  /// Group index the wheel stopped on (0 while not spinning).
+  final int spinWinner;
+
+  /// Epoch ms the break ends, or null when there is no break running.
+  final int? breakEndMs;
+
   /// Host increments on every push; viewer applies a snapshot only when it
   /// differs from the last one it applied.
   final int rev;
@@ -150,6 +162,9 @@ class Snapshot {
       _listEquals(groups, other.groups) &&
       gi == other.gi &&
       si == other.si &&
+      spinAtMs == other.spinAtMs &&
+      spinWinner == other.spinWinner &&
+      breakEndMs == other.breakEndMs &&
       rev == other.rev;
 
   @override
@@ -165,6 +180,9 @@ class Snapshot {
     Object.hashAll(groups),
     gi,
     si,
+    spinAtMs,
+    spinWinner,
+    breakEndMs,
     rev,
   );
 
@@ -180,6 +198,9 @@ class Snapshot {
     'groups': groups.map((g) => g.toJson()).toList(),
     'gi': gi,
     'si': si,
+    'spinAtMs': spinAtMs,
+    'spinWinner': spinWinner,
+    'breakEndMs': breakEndMs,
     'rev': rev,
   };
 
@@ -199,6 +220,9 @@ class Snapshot {
         .toList(),
     gi: json['gi'] as int? ?? 0,
     si: json['si'] as int? ?? 0,
+    spinAtMs: json['spinAtMs'] as int?,
+    spinWinner: json['spinWinner'] as int? ?? 0,
+    breakEndMs: json['breakEndMs'] as int?,
     rev: json['rev'] as int? ?? 0,
   );
 

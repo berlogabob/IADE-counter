@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
@@ -11,6 +12,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 import 'phase.dart';
 import 'session.dart';
 import 'sync.dart';
+import 'wheel.dart';
 
 void main() {
   // Route by URL fragment: /host/<token> drives the host, /view/<token> a
@@ -84,6 +86,7 @@ class _TimerPageState extends State<TimerPage>
   Timer? _sync; // viewer: 1s poll of the host
   Timer? _pushTimer; // host: 5s push while running
   Timer? _notesTimer; // host: 2s debounce before writing notes
+  Timer? _repaint; // sync mode: repaint so overlays follow the server clock
   int _rev = -1; // viewer: last snapshot rev applied
 
   Duration _total = const Duration(minutes: 15);
@@ -109,8 +112,27 @@ class _TimerPageState extends State<TimerPage>
   Map<String, String> _notes = {}; // group name -> note text
   int? _startDelta; // host: start +/- minutes for the current student
 
+  // Roulette and break both live only in the snapshot timestamps; every
+  // screen derives what to show from them, so no extra state to mirror.
+  final TextEditingController _breakCtl = TextEditingController(text: '10');
+  int? _spinAtMs; // host: server ms the spin started
+  int _spinWinner = 0; // host: group index the wheel stopped on
+  int? _breakEndMs; // host: server ms the break ends
+
   bool get _idle => _end == null && _paused == null;
   Duration get _limit => _inQa ? _qa : _total;
+
+  // The break overlay wins over the wheel when both are live.
+  bool get _breakActive => _breakEndMs != null;
+
+  // The wheel is live while its spin+hold window is open and there are enough
+  // groups to make a wheel. Everything is derived from [spinAtMs].
+  bool get _wheelActive {
+    if (_spinAtMs == null || _groups.length < 2) return false;
+    final elapsed = widget.sync!.nowMs() - _spinAtMs!;
+    return elapsed >= 0 &&
+        elapsed <= spinMs.inMilliseconds + holdMs.inMilliseconds;
+  }
 
   // Wall clock, not tick counting: ticks drift and browsers throttle hidden tabs.
   Duration get _remaining =>
@@ -293,6 +315,75 @@ class _TimerPageState extends State<TimerPage>
       _paused = null;
       _inQa = false;
     });
+    _ensureRepaint(); // back to 250 ms now that the wheel is done
+    _push();
+  }
+
+  /// Repaint periodically while sync is active so the overlays follow the
+  /// server clock. Faster while the wheel spins, so its animation stays smooth.
+  void _ensureRepaint() {
+    if (widget.sync == null) return;
+    final interval = _spinAtMs != null
+        ? const Duration(milliseconds: 50)
+        : const Duration(milliseconds: 250);
+    _repaint?.cancel();
+    _repaint = Timer.periodic(interval, (_) => setState(() {}));
+  }
+
+  /// Host: spin the roulette. Picks a random winner, stamps the start, and
+  /// pushes the snapshot; the wheel animates from the timestamps everywhere.
+  void _spin() {
+    if (!_idle || _groups.length < 2) return;
+    _spinWinner = Random().nextInt(_groups.length);
+    _spinAtMs = widget.sync!.nowMs();
+    _gi = _spinWinner;
+    _si = 0;
+    _push();
+    _ensureRepaint();
+  }
+
+  /// Host: offer to start a break via a minutes dialog.
+  void _breakDialog() {
+    if (!_idle) return;
+    _breakCtl.text = '10';
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Break'),
+        content: _field(_breakCtl, 'Break length'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              _breakStart();
+              Navigator.of(context).pop();
+            },
+            child: const Text('Start'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Host: set the break's end timestamp and push it.
+  void _breakStart() {
+    if (!_idle) return;
+    final minutes = _minutes(_breakCtl.text);
+    if (minutes == null) {
+      _snack('Check the break time');
+      return;
+    }
+    _breakEndMs = widget.sync!.nowMs() + minutes.inMilliseconds;
+    _push();
+    _ensureRepaint();
+  }
+
+  /// Host: end the break so the overlay disappears everywhere.
+  void _endBreak() {
+    _breakEndMs = null;
     _push();
   }
 
@@ -314,6 +405,9 @@ class _TimerPageState extends State<TimerPage>
       groups: List<Group>.from(_groups),
       gi: _gi,
       si: _si,
+      spinAtMs: _spinAtMs,
+      spinWinner: _spinWinner,
+      breakEndMs: _breakEndMs,
       rev: DateTime.now()
           .millisecondsSinceEpoch, // unique per push, survives host reload
     );
@@ -367,6 +461,7 @@ class _TimerPageState extends State<TimerPage>
           ?.poll(); // host: learn the server clock offset before the first push
       _loadNotes(); // host: load notes for the current share
     }
+    _ensureRepaint(); // repaint so overlays follow the server clock
   }
 
   /// Host only: decode the notes share (group name -> text) into memory.
@@ -404,6 +499,9 @@ class _TimerPageState extends State<TimerPage>
         _groups = List<Group>.from(s.groups);
         _gi = s.gi;
         _si = s.si;
+        _spinAtMs = s.spinAtMs;
+        _spinWinner = s.spinWinner;
+        _breakEndMs = s.breakEndMs;
         _end = s.endMs == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(
@@ -435,6 +533,7 @@ class _TimerPageState extends State<TimerPage>
   void dispose() {
     _ticker?.cancel();
     _sync?.cancel();
+    _repaint?.cancel();
     _pushTimer?.cancel();
     _notesTimer?.cancel();
     _blink.dispose();
@@ -444,6 +543,7 @@ class _TimerPageState extends State<TimerPage>
     _qaCtl.dispose();
     _rosterCtl.dispose();
     _notesCtl.dispose();
+    _breakCtl.dispose();
     WakelockPlus.disable();
     super.dispose();
   }
@@ -554,10 +654,13 @@ class _TimerPageState extends State<TimerPage>
           Phase.done => Color.lerp(Colors.black, _red, _blink.value),
         },
         // Setup: one compact block centred both ways, scrolls if it doesn't fit.
-        // Running: the clock fills the screen.
-        body: (widget.viewer || !_idle)
-            ? SizedBox.expand(child: child)
-            : Center(child: SingleChildScrollView(child: child)),
+        // Running: the clock fills the screen. The roulette/break overlays sit
+        // on top of all of it while they are live.
+        body: _stack(
+          (widget.viewer || !_idle)
+              ? SizedBox.expand(child: child)
+              : Center(child: SingleChildScrollView(child: child)),
+        ),
       ),
       child: SafeArea(
         child: Padding(
@@ -589,6 +692,20 @@ class _TimerPageState extends State<TimerPage>
                         onPressed: _shareLink,
                         icon: const Icon(Icons.qr_code),
                         label: const Text('Viewer link'),
+                      ),
+                    if (widget.sync != null)
+                      FilledButton.icon(
+                        onPressed: (_idle && _groups.length >= 2 && !_finished)
+                            ? _spin
+                            : null,
+                        icon: const Icon(Icons.casino),
+                        label: const Text('Spin'),
+                      ),
+                    if (widget.sync != null)
+                      OutlinedButton.icon(
+                        onPressed: _idle ? _breakDialog : null,
+                        icon: const Icon(Icons.free_breakfast),
+                        label: const Text('Break'),
                       ),
                     if (_end == null)
                       FilledButton.icon(
@@ -630,6 +747,133 @@ class _TimerPageState extends State<TimerPage>
       ),
     );
   }
+
+  /// The whole body with the wheel/break overlay on top while either is live.
+  Widget _stack(Widget content) {
+    final overlays = <Widget>[];
+    if (_breakActive) {
+      overlays.add(_breakOverlay());
+    } else if (_wheelActive) {
+      overlays.add(_wheelOverlay());
+    }
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        content,
+        ...overlays.map((o) => Positioned.fill(child: o)),
+      ],
+    );
+  }
+
+  /// The spinning wheel, shown while its spin+hold window is open.
+  Widget _wheelOverlay() => Builder(
+    builder: (context) {
+      final theme = Theme.of(context);
+      final elapsed = widget.sync!.nowMs() - _spinAtMs!;
+      final spinning = elapsed < spinMs.inMilliseconds;
+      return Container(
+        color: Colors.black.withValues(alpha: 0.9),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = min(constraints.maxWidth, constraints.maxHeight);
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CustomPaint(
+                    size: Size(side * 0.8, side * 0.8),
+                    painter: WheelPainter(
+                      labels: _groups.map((g) => g.name).toList(),
+                      angle: wheelAngle(
+                        _groups.length,
+                        _spinWinner,
+                        elapsed / spinMs.inMilliseconds,
+                      ),
+                      colourA: theme.colorScheme.primary,
+                      colourB: theme.colorScheme.tertiary,
+                    ),
+                  ),
+                  if (!spinning)
+                    Padding(
+                      padding: EdgeInsets.only(top: side * 0.08),
+                      child: Text(
+                        _groups[_spinWinner].name,
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: side * 0.1,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    },
+  );
+
+  /// The break countdown, shown while a break is running. Fills the screen and
+  /// turns red once past its end (overtime).
+  Widget _breakOverlay() => Builder(
+    builder: (context) {
+      final remaining = Duration(
+        milliseconds: _breakEndMs! - widget.sync!.nowMs(),
+      );
+      final overtime = remaining <= Duration.zero;
+      return Container(
+        color: _calm,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final side = min(constraints.maxWidth, constraints.maxHeight);
+            return Column(
+              mainAxisSize: MainAxisSize.max,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          'Break',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: side * 0.08,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        FittedBox(
+                          child: Text(
+                            formatRemaining(remaining),
+                            style: TextStyle(
+                              color: overtime ? Colors.red : Colors.white,
+                              fontSize: side * 0.2,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                if (!widget.viewer)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 40),
+                    child: FilledButton.icon(
+                      onPressed: _endBreak,
+                      icon: const Icon(Icons.stop),
+                      label: const Text('End break'),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      );
+    },
+  );
 
   /// The host's session log, or nothing when empty. Used standalone and by
   /// viewers (who never see the setup fields or buttons).

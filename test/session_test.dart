@@ -18,6 +18,9 @@ void main() {
       ],
       gi: 1,
       si: 0,
+      spinAtMs: 1_700_000_005_000,
+      spinWinner: 2,
+      breakEndMs: 1_700_000_060_000,
       rev: 7,
     );
     expect(Snapshot.fromJson(s.toJson()), s);
