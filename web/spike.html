@@ -1,0 +1,18 @@
+<!doctype html><meta charset=utf-8><title>sync spike</title>
+<pre id=o>running…</pre>
+<script>
+// usage: spike.html#<workerUrl>|<shareToken>   e.g. #https://iade-sync.x.workers.dev|AbC123
+const [base, token] = decodeURIComponent(location.hash.slice(1)).split('|');
+const u = `${base}/public.php/dav/files/${token}`;
+const log = s => document.getElementById('o').textContent += '\n' + s;
+(async () => {
+  const body = JSON.stringify({ t: Date.now() });
+  const put = await fetch(u, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
+  log(`PUT ${put.status}`);
+  const get = await fetch(u);
+  log(`GET ${get.status} etag=${get.headers.get('ETag')} date=${get.headers.get('Date')}`);
+  log(`body ${await get.text()}`);
+  const nm = await fetch(u, { headers: { 'If-None-Match': get.headers.get('ETag') } });
+  log(`GET If-None-Match ${nm.status} (want 304)`);
+})().catch(e => log('FAIL ' + e));
+</script>
