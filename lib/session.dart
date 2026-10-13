@@ -1,3 +1,93 @@
+/// One roster line: a group name, an optional planned start time and the
+/// students expected in it.
+class Group {
+  const Group({
+    required this.name,
+    this.planned = '',
+    this.students = const [],
+  });
+
+  /// Group name shown in the label and log.
+  final String name;
+
+  /// Planned start as 'HH:MM', or '' when none was given.
+  final String planned;
+
+  /// Students named for this group (may be empty).
+  final List<String> students;
+
+  Map<String, dynamic> toJson() => {
+    'name': name,
+    'planned': planned,
+    'students': students,
+  };
+
+  factory Group.fromJson(Map<String, dynamic> json) => Group(
+    name: (json['name'] as String? ?? ''),
+    planned: (json['planned'] as String? ?? ''),
+    students: (json['students'] as List<dynamic>? ?? const [])
+        .map((e) => e.toString())
+        .toList(),
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is Group &&
+      other.name == name &&
+      other.planned == planned &&
+      _sameList(students, other.students);
+
+  @override
+  int get hashCode => Object.hash(name, planned, Object.hashAll(students));
+
+  static bool _sameList(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
+}
+
+/// Parse a roster into [Group]s, one per non-empty line.
+///
+/// Each line is `'HH:MM Group name: student, student'`; the time is optional,
+/// so is the student list. Lines that are blank are ignored.
+List<Group> parseRoster(String text) {
+  final lineRe = RegExp(r'^(\d{1,2}:\d{2})?\s*([^:]+?)\s*(?::\s*(.*))?$');
+  final groups = <Group>[];
+  for (final rawLine in text.split('\n')) {
+    final line = rawLine.trim();
+    if (line.isEmpty) continue;
+    final m = lineRe.firstMatch(line);
+    if (m == null || m.end != line.length) continue;
+    final planned = m.group(1) ?? '';
+    final name = (m.group(2) ?? '').trim();
+    final studentsRaw = m.group(3) ?? '';
+    final students = studentsRaw
+        .split(',')
+        .map((e) => e.trim())
+        .where((e) => e.isNotEmpty)
+        .toList();
+    groups.add(Group(name: name, planned: planned, students: students));
+  }
+  return groups;
+}
+
+/// Minutes the [actual] start was after (positive) or before (negative) the
+/// planned 'HH:MM' time. Null when [planned] is empty or malformed. Same-day
+/// arithmetic only.
+int? startDelta(String planned, DateTime actual) {
+  if (planned.isEmpty) return null;
+  final parts = planned.split(':');
+  if (parts.length != 2) return null;
+  final h = int.tryParse(parts[0]);
+  final mi = int.tryParse(parts[1]);
+  if (h == null || mi == null) return null;
+  final plannedAt = DateTime(actual.year, actual.month, actual.day, h, mi);
+  return actual.difference(plannedAt).inMinutes;
+}
+
 /// Mirrors the host's timer state so a viewer can mirror it exactly.
 ///
 /// A plain data object: no logic beyond serialisation and the remaining-time
@@ -12,6 +102,9 @@ class Snapshot {
     required this.qaMs,
     required this.student,
     this.log = const [],
+    this.groups = const [],
+    this.gi = 0,
+    this.si = 0,
     this.rev = 0,
   });
 
@@ -29,6 +122,15 @@ class Snapshot {
   final int student;
   final List<String> log;
 
+  /// Roster groups parsed from the host's roster field (empty when none).
+  final List<Group> groups;
+
+  /// Index of the current group within [groups].
+  final int gi;
+
+  /// Index of the current student within its group.
+  final int si;
+
   /// Host increments on every push; viewer applies a snapshot only when it
   /// differs from the last one it applied.
   final int rev;
@@ -45,6 +147,9 @@ class Snapshot {
       qaMs == other.qaMs &&
       student == other.student &&
       _listEquals(log, other.log) &&
+      _listEquals(groups, other.groups) &&
+      gi == other.gi &&
+      si == other.si &&
       rev == other.rev;
 
   @override
@@ -57,6 +162,9 @@ class Snapshot {
     qaMs,
     student,
     Object.hashAll(log),
+    Object.hashAll(groups),
+    gi,
+    si,
     rev,
   );
 
@@ -69,6 +177,9 @@ class Snapshot {
     'qaMs': qaMs,
     'student': student,
     'log': log,
+    'groups': groups.map((g) => g.toJson()).toList(),
+    'gi': gi,
+    'si': si,
     'rev': rev,
   };
 
@@ -83,10 +194,15 @@ class Snapshot {
     log: (json['log'] as List<dynamic>? ?? const [])
         .map((e) => e.toString())
         .toList(),
+    groups: (json['groups'] as List<dynamic>? ?? const [])
+        .map((e) => Group.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    gi: json['gi'] as int? ?? 0,
+    si: json['si'] as int? ?? 0,
     rev: json['rev'] as int? ?? 0,
   );
 
-  static bool _listEquals(List<String> a, List<String> b) {
+  static bool _listEquals<T>(List<T> a, List<T> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter/foundation.dart';
@@ -15,11 +16,22 @@ void main() {
   // Route by URL fragment: /host/<token> drives the host, /view/<token> a
   // mirror of it; anything else is today's standalone timer (no Sync).
   final route = Uri.base.fragment;
-  final token = route.startsWith('/host/')
-      ? route.substring('/host/'.length)
-      : route.startsWith('/view/')
-      ? route.substring('/view/'.length)
-      : null;
+  String? token;
+  String? notesToken;
+  if (route.startsWith('/host/')) {
+    // /host/<token> or /host/<token>/<notesToken> (notes are a second share).
+    final rest = route.substring('/host/'.length);
+    final slash = rest.indexOf('/');
+    if (slash == -1) {
+      token = rest;
+    } else {
+      token = rest.substring(0, slash);
+      notesToken = rest.substring(slash + 1);
+    }
+  } else if (route.startsWith('/view/')) {
+    // The viewer route never carries a notes token.
+    token = route.substring('/view/'.length);
+  }
   final viewer = route.startsWith('/view/');
   runApp(
     MaterialApp(
@@ -28,16 +40,23 @@ void main() {
       theme: ThemeData.dark(useMaterial3: true),
       home: token == null
           ? const TimerPage()
-          : TimerPage(sync: Sync(token), viewer: viewer),
+          : TimerPage(
+              sync: Sync(token),
+              notesSync: notesToken == null ? null : Sync(notesToken),
+              viewer: viewer,
+            ),
     ),
   );
 }
 
 class TimerPage extends StatefulWidget {
-  const TimerPage({super.key, this.sync, this.viewer = false});
+  const TimerPage({super.key, this.sync, this.notesSync, this.viewer = false});
 
   /// Null for the standalone timer; set for host (push) and viewer (mirror).
   final Sync? sync;
+
+  /// Null unless the host URL carries a second notes share token.
+  final Sync? notesSync;
 
   /// True when mirroring a host's timer rather than running one.
   final bool viewer;
@@ -64,6 +83,7 @@ class _TimerPageState extends State<TimerPage>
 
   Timer? _sync; // viewer: 1s poll of the host
   Timer? _pushTimer; // host: 5s push while running
+  Timer? _notesTimer; // host: 2s debounce before writing notes
   int _rev = -1; // viewer: last snapshot rev applied
 
   Duration _total = const Duration(minutes: 15);
@@ -79,6 +99,15 @@ class _TimerPageState extends State<TimerPage>
   // ponytail: in memory only, lost when the app closes; persist to a file or
   // shared_preferences if the log must survive a restart.
   final _log = <String>[];
+
+  final _rosterCtl = TextEditingController();
+  final _notesCtl = TextEditingController();
+  List<Group> _groups = [];
+  int _gi = 0; // current group index
+  int _si = 0; // current student index within the group
+  bool _finished = false; // past the last group's last student
+  Map<String, String> _notes = {}; // group name -> note text
+  int? _startDelta; // host: start +/- minutes for the current student
 
   bool get _idle => _end == null && _paused == null;
   Duration get _limit => _inQa ? _qa : _total;
@@ -151,6 +180,18 @@ class _TimerPageState extends State<TimerPage>
       _total = total;
       _warn = warn;
       _qa = qa;
+      // Parse the roster only before the first student; later starts keep
+      // the position that _nextStudent advanced to.
+      if (_log.isEmpty) {
+        _groups = parseRoster(_rosterCtl.text);
+        _gi = 0;
+        _si = 0;
+        _finished = false;
+      }
+      // First student of a group: record the start offset against its plan.
+      _startDelta = _groups.isNotEmpty && _si == 0 && !_finished
+          ? startDelta(_groups[_gi].planned, DateTime.now())
+          : null;
     }
     _run(_remaining);
   }
@@ -198,8 +239,48 @@ class _TimerPageState extends State<TimerPage>
   void _nextStudent() {
     final talk = _inQa ? _talkTaken : _total - _remaining;
     final qa = _inQa ? _qa - _remaining : Duration.zero;
-    _log.add(logLine(_log.length + 1, talk, _total, qa));
+    _log.add(_logLine(_log.length + 1, talk, _total, qa));
+    _startDelta = null;
+    if (_groups.isNotEmpty) {
+      _si++;
+      if (_si >= _maxStudents(_groups[_gi])) {
+        _gi++;
+        _si = 0;
+      }
+      // Past the last group's last student: stay idle, show 'All done'.
+      if (_gi >= _groups.length) {
+        _finished = true;
+        _gi = _groups.length - 1;
+        _si = _maxStudents(_groups[_gi]) - 1;
+      }
+    }
     _reset();
+  }
+
+  /// At least one so a group with no listed students still counts as one slot.
+  int _maxStudents(Group g) => g.students.isEmpty ? 1 : g.students.length;
+
+  /// The current student's name within [group], or 'Student #n' when the roster
+  /// listed fewer students than are being presented.
+  String _studentNameInGroup() {
+    if (_groups.isEmpty) return 'Student #${_log.length + 1}';
+    final group = _groups[_gi];
+    return (_si >= 0 && _si < group.students.length)
+        ? group.students[_si]
+        : 'Student #${_log.length + 1}';
+  }
+
+  /// The host's log line, prefixed with `'<group> · <student>'` when a roster
+  /// is loaded, with the start offset appended for the group's first student.
+  String _logLine(int num, Duration talk, Duration total, Duration qa) {
+    final base = logLine(num, talk, total, qa);
+    if (_groups.isEmpty) return base;
+    final group = _groups[_gi];
+    final line = '${group.name} · $_studentNameInGroup()  $base';
+    final d = _startDelta;
+    if (d == null) return line;
+    if (d == 0) return '$line start on time';
+    return d > 0 ? '$line start +$d min' : '$line start -${-d} min';
   }
 
   void _reset() {
@@ -230,6 +311,9 @@ class _TimerPageState extends State<TimerPage>
       qaMs: _qa.inMilliseconds,
       student: _log.length + 1,
       log: List<String>.from(_log),
+      groups: List<Group>.from(_groups),
+      gi: _gi,
+      si: _si,
       rev: DateTime.now()
           .millisecondsSinceEpoch, // unique per push, survives host reload
     );
@@ -281,6 +365,24 @@ class _TimerPageState extends State<TimerPage>
     } else {
       widget.sync
           ?.poll(); // host: learn the server clock offset before the first push
+      _loadNotes(); // host: load notes for the current share
+    }
+  }
+
+  /// Host only: decode the notes share (group name -> text) into memory.
+  /// Bad JSON is ignored; without a notes token the notes live in memory only.
+  Future<void> _loadNotes() async {
+    final raw = await widget.notesSync?.getText();
+    if (raw == null) return;
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        setState(() {
+          _notes = decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+        });
+      }
+    } catch (_) {
+      // ignore bad JSON
     }
   }
 
@@ -299,6 +401,9 @@ class _TimerPageState extends State<TimerPage>
         _warn = Duration(milliseconds: s.warnMs);
         _qa = Duration(milliseconds: s.qaMs);
         _inQa = s.inQa;
+        _groups = List<Group>.from(s.groups);
+        _gi = s.gi;
+        _si = s.si;
         _end = s.endMs == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(
@@ -331,11 +436,14 @@ class _TimerPageState extends State<TimerPage>
     _ticker?.cancel();
     _sync?.cancel();
     _pushTimer?.cancel();
+    _notesTimer?.cancel();
     _blink.dispose();
     _player.dispose();
     _totalCtl.dispose();
     _warnCtl.dispose();
     _qaCtl.dispose();
+    _rosterCtl.dispose();
+    _notesCtl.dispose();
     WakelockPlus.disable();
     super.dispose();
   }
@@ -361,6 +469,18 @@ class _TimerPageState extends State<TimerPage>
           _field(_warnCtl, 'Warning before end'),
           _field(_qaCtl, 'Q&A time'),
         ],
+      ),
+      SizedBox(
+        width: 320,
+        child: TextField(
+          controller: _rosterCtl,
+          maxLines: 5,
+          keyboardType: TextInputType.multiline,
+          decoration: const InputDecoration(
+            labelText: 'Roster (one group per line)',
+            helperText: '14:30 Group A: Ana, Rui — time and names optional',
+          ),
+        ),
       ),
       if (kIsWeb)
         TextButton.icon(
@@ -392,7 +512,7 @@ class _TimerPageState extends State<TimerPage>
         Wrap(
           children: [
             TextButton(
-              onPressed: () => _copy(_log.join('\n')),
+              onPressed: () => _copy(_fullLog()),
               child: const Text('Copy log'),
             ),
             TextButton(
@@ -410,7 +530,11 @@ class _TimerPageState extends State<TimerPage>
     final time = _idle
         ? formatRemaining(_minutes(_totalCtl.text) ?? _total)
         : formatRemaining(_remaining);
-    final student = 'Student #${_log.length + 1}';
+    final student = _finished
+        ? 'All done'
+        : _groups.isEmpty
+        ? 'Student #${_log.length + 1}'
+        : '${_groups[_gi].name} · ${_studentNameInGroup()}';
     final clock = FittedBox(
       child: Text(
         time,
@@ -499,6 +623,7 @@ class _TimerPageState extends State<TimerPage>
                     ],
                   ],
                 ),
+              if (!widget.viewer && _groups.isNotEmpty) _notesTile(),
             ],
           ),
         ),
@@ -511,5 +636,49 @@ class _TimerPageState extends State<TimerPage>
   Widget _logBlock() {
     if (_log.isEmpty) return const SizedBox.shrink();
     return Text(_log.join('\n'));
+  }
+
+  /// The host's log plus the current group's notes, for 'Copy log'.
+  String _fullLog() {
+    var text = _log.join('\n');
+    if (_groups.isNotEmpty) {
+      final group = _groups[_gi];
+      final note = _notes[group.name];
+      if (note != null && note.isNotEmpty) {
+        text = '$text\nNotes (${group.name}): $note';
+      }
+    }
+    return text;
+  }
+
+  /// Host-only notes editor: one ExpansionTile bound to the current group's
+  /// note. Without a notes token the notes live in memory only.
+  Widget _notesTile() {
+    final group = _groups[_gi];
+    if (_notesCtl.text != (_notes[group.name] ?? '')) {
+      _notesCtl.text = _notes[group.name] ?? '';
+    }
+    return ExpansionTile(
+      title: const Text('Notes'),
+      children: [
+        TextField(
+          controller: _notesCtl,
+          maxLines: 4,
+          keyboardType: TextInputType.multiline,
+          decoration: InputDecoration(labelText: 'Notes for ${group.name}'),
+          onChanged: (value) => _onNotesChanged(group.name, value),
+        ),
+      ],
+    );
+  }
+
+  /// Host only: remember the current group's note and, debounced 2 s, write the
+  /// whole map to the notes share. Without a notes token it stays in memory.
+  void _onNotesChanged(String groupName, String value) {
+    setState(() => _notes[groupName] = value);
+    _notesTimer?.cancel();
+    _notesTimer = Timer(const Duration(seconds: 2), () {
+      widget.notesSync?.putText(jsonEncode(_notes));
+    });
   }
 }

@@ -24,7 +24,10 @@ class Sync {
 
   String get _url => '$worker/public.php/dav/files/$token';
 
-  Future<Snapshot?> poll() async {
+  /// Fetch the share's raw body (same URL/ETag/error rules as [getText]).
+  /// Returns null on 304, non-200, connection error, or an empty body (a
+  /// brand-new, empty share). Viewer keeps running on its last known state.
+  Future<String?> getText() async {
     try {
       final headers = <String, String>{};
       if (_etag != null) headers['if-none-match'] = _etag!;
@@ -42,23 +45,33 @@ class Sync {
       final body = resp.body.trim();
       if (body.isEmpty) return null; // new, empty share
       _etag = resp.headers['etag'];
-      return Snapshot.fromJson(jsonDecode(body) as Map<String, dynamic>);
+      return body;
     } catch (_) {
-      return null; // viewer keeps running on its last known state
+      return null;
     }
   }
 
-  Future<void> push(Snapshot s) async {
+  /// Write the share's raw body. Failures are swallowed: the host keeps
+  /// running offline; a failed push is not a failure.
+  Future<void> putText(String text) async {
     try {
       await http.put(
         Uri.parse(_url),
-        headers: {'content-type': 'application/json'},
-        body: jsonEncode(s.toJson()),
+        headers: {'content-type': 'text/plain'},
+        body: text,
       );
     } catch (_) {
       // host keeps running offline; a failed push is not a failure
     }
   }
+
+  Future<Snapshot?> poll() async {
+    final body = await getText();
+    if (body == null) return null;
+    return Snapshot.fromJson(jsonDecode(body) as Map<String, dynamic>);
+  }
+
+  Future<void> push(Snapshot s) async => putText(jsonEncode(s.toJson()));
 
   /// RFC 7231 HTTP-date (IMF-fixdate: `Wed, 01 Jan 2024 00:00:00 GMT`) to epoch
   /// ms, or -1 when unparseable. Kept local so this file stays web-safe.
