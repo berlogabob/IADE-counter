@@ -457,11 +457,45 @@ class _TimerPageState extends State<TimerPage>
     if (widget.viewer && widget.sync != null) {
       _startSync();
     } else {
-      widget.sync
-          ?.poll(); // host: learn the server clock offset before the first push
+      _restore(); // host: learn the server clock offset and resume a reloaded session
       _loadNotes(); // host: load notes for the current share
     }
     _ensureRepaint(); // repaint so overlays follow the server clock
+  }
+
+  /// Host only: after a page reload, resume from the last pushed snapshot so the
+  /// roster, position, log and running timer survive. Skipped when the share is
+  /// empty or the host already started something while the request was in flight.
+  Future<void> _restore() async {
+    final s = await widget.sync?.poll(); // also sets the server clock offset
+    if (s == null || s.totalMs <= 0 || !mounted) return;
+    if (!_idle || _log.isNotEmpty || _groups.isNotEmpty) return;
+    setState(() {
+      _total = Duration(milliseconds: s.totalMs);
+      _warn = Duration(milliseconds: s.warnMs);
+      _qa = Duration(milliseconds: s.qaMs);
+      _totalCtl.text = (_total.inSeconds / 60).toString();
+      _warnCtl.text = (_warn.inSeconds / 60).toString();
+      _qaCtl.text = (_qa.inSeconds / 60).toString();
+      _inQa = s.inQa;
+      _groups = List<Group>.from(s.groups);
+      _gi = s.gi;
+      _si = s.si;
+      _finished = s.finished;
+      _log
+        ..clear()
+        ..addAll(s.log);
+      _spinAtMs = s.spinAtMs;
+      _spinWinner = s.spinWinner;
+      _breakEndMs = s.breakEndMs;
+      _paused = s.pausedMs == null ? null : Duration(milliseconds: s.pausedMs!);
+      // shortcut: talk time before a Q&A is not stored, so a reload during Q&A
+      // logs it as 0; store it in the snapshot if that matters.
+      _talkTaken = Duration.zero;
+    });
+    if (s.endMs != null) {
+      _run(Duration(milliseconds: s.endMs! - widget.sync!.nowMs()));
+    }
   }
 
   /// Host only: decode the notes share (group name -> text) into memory.
