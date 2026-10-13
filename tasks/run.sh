@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 T=$1; F=tasks/$T.md
 h() { sed -n "1,/^---$/p" "$F" | sed -n "s/^$1: //p"; }
 title=$(h title); runner=$(h runner); finding=$(h finding); files=$(h files); max=$(h max_diff); tmin=$(h tests_min)
-[ -z "$(git status --porcelain --untracked-files=no)" ] || { echo "STOP: tracked files are dirty, commit or stash first"; exit 2; }
+[ -z "$(git status --porcelain --untracked-files=no -- . ':!tasks/LOG.md')" ] || { echo "STOP: tracked files are dirty, commit or stash first"; exit 2; }
 base=$(git rev-parse HEAD); t0=$(date +%s)
 prompt="Do tasks/$T.md exactly. Edit ONLY these files: $files. Do not edit pubspec.yaml, lib/phase.dart or anything else. Keep the diff small."
 case $runner in
