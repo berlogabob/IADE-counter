@@ -105,6 +105,7 @@ class Snapshot {
     this.groups = const [],
     this.gi = 0,
     this.si = 0,
+    this.finished = false,
     this.spinAtMs,
     this.spinWinner = 0,
     this.breakEndMs,
@@ -134,6 +135,9 @@ class Snapshot {
   /// Index of the current student within its group.
   final int si;
 
+  /// True once the last student of the last group is done ("All done").
+  final bool finished;
+
   /// Epoch ms the roulette spin started, while the wheel is animating.
   final int? spinAtMs;
 
@@ -161,6 +165,7 @@ class Snapshot {
       _listEquals(log, other.log) &&
       _listEquals(groups, other.groups) &&
       gi == other.gi &&
+      finished == other.finished &&
       si == other.si &&
       spinAtMs == other.spinAtMs &&
       spinWinner == other.spinWinner &&
@@ -179,6 +184,7 @@ class Snapshot {
     Object.hashAll(log),
     Object.hashAll(groups),
     gi,
+    finished,
     si,
     spinAtMs,
     spinWinner,
@@ -197,6 +203,7 @@ class Snapshot {
     'log': log,
     'groups': groups.map((g) => g.toJson()).toList(),
     'gi': gi,
+    'finished': finished,
     'si': si,
     'spinAtMs': spinAtMs,
     'spinWinner': spinWinner,
@@ -219,6 +226,7 @@ class Snapshot {
         .map((e) => Group.fromJson(e as Map<String, dynamic>))
         .toList(),
     gi: json['gi'] as int? ?? 0,
+    finished: json['finished'] as bool? ?? false,
     si: json['si'] as int? ?? 0,
     spinAtMs: json['spinAtMs'] as int?,
     spinWinner: json['spinWinner'] as int? ?? 0,

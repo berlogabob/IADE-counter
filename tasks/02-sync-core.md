@@ -44,7 +44,7 @@ Both ETag and Date are readable in the browser (the worker exposes them).
 ## Acceptance
 - `flutter analyze` and `flutter test` pass.
 - `flutter build web` passes.
-- Manual (Claude does it, not you): host tab at `#/host/LnfqGMop8n3ktyt`, viewer tab at `#/view/LnfqGMop8n3ktyt`; Start/Pause/Q&A/Next student on host appear on viewer within ~2 s; reload viewer mid-talk resumes at the right time.
+- Manual (Claude does it, not you): host tab at `#/host/<test-token>`, viewer tab at `#/view/LnfqGMop8n3ktyt`; Start/Pause/Q&A/Next student on host appear on viewer within ~2 s; reload viewer mid-talk resumes at the right time.
 
 ## Out of scope (later steps)
 Roster, notes, roulette, break timer, QR, admin screen, per-role tokens.

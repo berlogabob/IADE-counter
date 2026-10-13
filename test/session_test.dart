@@ -38,12 +38,15 @@ void main() {
     expect(parseRoute('/view/ab-cd').role, 'standalone');
   });
 
-  test('parseRoute: empty, empty segments and unknown fragments are standalone', () {
-    expect(parseRoute('').role, 'standalone');
-    expect(parseRoute('/host/').role, 'standalone');
-    expect(parseRoute('/view/').role, 'standalone');
-    expect(parseRoute('?total=15').role, 'standalone');
-  });
+  test(
+    'parseRoute: empty, empty segments and unknown fragments are standalone',
+    () {
+      expect(parseRoute('').role, 'standalone');
+      expect(parseRoute('/host/').role, 'standalone');
+      expect(parseRoute('/view/').role, 'standalone');
+      expect(parseRoute('?total=15').role, 'standalone');
+    },
+  );
 
   test('toJson/fromJson roundtrip equals', () {
     const s = Snapshot(
@@ -60,6 +63,7 @@ void main() {
         Group(name: 'Group B', planned: '', students: ['Sam']),
       ],
       gi: 1,
+      finished: true,
       si: 0,
       spinAtMs: 1_700_000_005_000,
       spinWinner: 2,

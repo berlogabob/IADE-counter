@@ -403,6 +403,7 @@ class _TimerPageState extends State<TimerPage>
       log: List<String>.from(_log),
       groups: List<Group>.from(_groups),
       gi: _gi,
+      finished: _finished,
       si: _si,
       spinAtMs: _spinAtMs,
       spinWinner: _spinWinner,
@@ -497,6 +498,7 @@ class _TimerPageState extends State<TimerPage>
         _inQa = s.inQa;
         _groups = List<Group>.from(s.groups);
         _gi = s.gi;
+        _finished = s.finished;
         _si = s.si;
         _spinAtMs = s.spinAtMs;
         _spinWinner = s.spinWinner;
