@@ -38,7 +38,7 @@ class Sync {
       if (resp.statusCode != 200) return null;
       final date = resp.headers['date'];
       if (date != null) {
-        final server = _httpDateToEpoch(date);
+        final server = httpDateToEpoch(date);
         if (server != -1) {
           offsetMs = server - DateTime.now().millisecondsSinceEpoch;
         }
@@ -76,7 +76,7 @@ class Sync {
 
   /// RFC 7231 HTTP-date (IMF-fixdate: `Wed, 01 Jan 2024 00:00:00 GMT`) to epoch
   /// ms, or -1 when unparseable. Kept local so this file stays web-safe.
-  static int _httpDateToEpoch(String raw) {
+  static int httpDateToEpoch(String raw) {
     const months = <String, int>{
       'jan': 1,
       'feb': 2,
@@ -94,25 +94,27 @@ class Sync {
     final s = raw.trim().toLowerCase();
     final body = s.contains(',') ? s.substring(s.indexOf(',') + 1) : s;
     final parts = body.trim().split(RegExp(r'\s+'));
-    // [day, month, year, hh, mm, ss]
-    if (parts.length < 6) return -1;
+    // [day, month, year, hh:mm:ss, gmt]
+    if (parts.length < 5) return -1;
     final month = months[parts[1]];
     if (month == null) return -1;
     final year = int.tryParse(parts[2]);
     if (year == null) return -1;
+    final time = parts[3].split(':');
+    if (time.length != 3) return -1;
+    final day = int.tryParse(parts[0]);
+    final hour = int.tryParse(time[0]);
+    final minute = int.tryParse(time[1]);
+    final second = int.tryParse(time[2]);
+    if (day == null || hour == null || minute == null || second == null) {
+      return -1;
+    }
     final y = year < 70
         ? 2000 + year
         : year < 100
         ? 1900 + year
         : year;
-    final date = DateTime.utc(
-      y,
-      month,
-      int.tryParse(parts[0]) ?? 0,
-      int.tryParse(parts[3]) ?? 0,
-      int.tryParse(parts[4]) ?? 0,
-      int.tryParse(parts[5]) ?? 0,
-    );
+    final date = DateTime.utc(y, month, day, hour, minute, second);
     return date.millisecondsSinceEpoch;
   }
 }
