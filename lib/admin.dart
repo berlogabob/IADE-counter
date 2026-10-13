@@ -150,8 +150,10 @@ class _AdminPageState extends State<AdminPage> {
     } catch (_) {
       _status = 'Something went wrong.';
     } finally {
-      if (mounted)
-        setState(() => _busy = false); // also repaints early-return messages
+      // Also repaints the message set by an early return above.
+      if (mounted) {
+        setState(() => _busy = false);
+      }
     }
   }
 
