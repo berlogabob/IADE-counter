@@ -10,6 +10,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'admin.dart';
+import 'loop.dart';
 import 'phase.dart';
 import 'session.dart';
 import 'sync.dart';
@@ -82,6 +83,10 @@ class _TimerPageState extends State<TimerPage>
   final _totalCtl = TextEditingController(text: _preset('total', '15'));
   final _warnCtl = TextEditingController(text: _preset('warn', '1'));
   final _qaCtl = TextEditingController(text: _preset('qa', '10'));
+  final _setupCtl = TextEditingController(text: '2');
+  final _packCtl = TextEditingController(text: '1');
+  String _stage = '';
+  final _done = <int>[];
   final _player = AudioPlayer();
   late final _blink = AnimationController(vsync: this);
 
@@ -209,7 +214,7 @@ class _TimerPageState extends State<TimerPage>
       _qa = qa;
       // Parse the roster only before the first student; later starts keep
       // the position that _nextStudent advanced to.
-      if (_log.isEmpty) {
+      if (_log.isEmpty && _stage.isEmpty) {
         _groups = parseRoster(_rosterCtl.text);
         _gi = 0;
         _si = 0;
@@ -329,17 +334,95 @@ class _TimerPageState extends State<TimerPage>
     if (widget.sync == null) return;
     final interval = repaintInterval(wheelActive: _wheelActive);
     _repaint?.cancel();
-    _repaint = Timer.periodic(interval, (_) => setState(() {}));
+    _repaint = Timer.periodic(interval, (_) {
+      _loopTick();
+      setState(() {});
+    });
+  }
+
+  int get _setupMs => _minutes(_setupCtl.text)?.inMilliseconds ?? 120000;
+  int get _packMs => _minutes(_packCtl.text)?.inMilliseconds ?? 60000;
+  String get _nextStage => nextStage(
+    _stage,
+    hasSetup: _setupMs > 0,
+    hasQa: (_minutes(_qaCtl.text) ?? _qa) > Duration.zero,
+    hasPack: _packMs > 0,
+  );
+
+  void _enter(String stage) {
+    if (widget.sync == null || widget.viewer) return;
+    // A disabled pack still completes and logs the presenter before drawing.
+    if (stage == 'pack' ||
+        (stage == 'draw' && (_stage == 'talk' || _stage == 'qa'))) {
+      final talk = _inQa ? _talkTaken : _total - _remaining;
+      final qa = _inQa ? _qa - _remaining : Duration.zero;
+      _log.add(_logLine(_log.length + 1, talk, _total, qa));
+      _done.add(_gi);
+      _startDelta = null;
+      _reset();
+    }
+    _stage = stage;
+    if (stage != 'draw') _spinAtMs = null;
+    switch (stage) {
+      case 'draw':
+        _breakEndMs = null;
+        final w = drawNext(_groups.length, _done, Random());
+        if (w == null) {
+          _finished = true;
+          _stage = '';
+          _push();
+          return;
+        }
+        _spinTo(w);
+      case 'setup':
+        _breakLabel = 'Setup';
+        _breakEndMs = widget.sync!.nowMs() + _setupMs;
+      case 'talk':
+        _breakEndMs = null;
+        _inQa = false;
+        _start();
+      case 'qa':
+        _startQa();
+      case 'pack':
+        _breakLabel = 'Pack';
+        _breakEndMs = widget.sync!.nowMs() + _packMs;
+    }
+    _push();
+    _ensureRepaint();
+  }
+
+  void _loopTick() {
+    if (widget.sync == null || widget.viewer || _stage.isEmpty) return;
+    final stage = _stage;
+    final now = widget.sync!.nowMs();
+    final advance = switch (stage) {
+      'draw' =>
+        _spinAtMs != null &&
+            now >= _spinAtMs! + spinMs.inMilliseconds + holdMs.inMilliseconds,
+      'setup' || 'pack' => _breakEndMs != null && now >= _breakEndMs!,
+      'talk' || 'qa' => _end != null && _remaining <= Duration.zero,
+      _ => false,
+    };
+    if (advance && stage == _stage) _enter(_nextStage);
   }
 
   /// Host: spin the roulette. Picks a random winner, stamps the start, and
   /// pushes the snapshot; the wheel animates from the timestamps everywhere.
   void _spin() {
     if (!_idle || _groups.length < 2) return;
-    _spinWinner = Random().nextInt(_groups.length);
-    _spinAtMs = widget.sync!.nowMs();
-    _gi = _spinWinner;
+    _spinTo(Random().nextInt(_groups.length));
+  }
+
+  void _spinTo(int winner) {
+    _spinWinner = winner;
+    _gi = winner;
     _si = 0;
+    if (_stage == 'draw' && remaining(_groups.length, _done).length == 1) {
+      _spinAtMs = null;
+      _enter(_nextStage);
+      return;
+    }
+    _spinAtMs = widget.sync!.nowMs();
     _push();
     _ensureRepaint();
     _spinEnd?.cancel();
@@ -430,6 +513,10 @@ class _TimerPageState extends State<TimerPage>
 
   /// Host: end the break so the overlay disappears everywhere.
   void _endBreak() {
+    if (_stage == 'setup' || _stage == 'pack') {
+      _enter(_nextStage);
+      return;
+    }
     _breakEndMs = null;
     _push();
   }
@@ -457,6 +544,10 @@ class _TimerPageState extends State<TimerPage>
       spinWinner: _spinWinner,
       breakEndMs: _breakEndMs,
       breakLabel: _breakLabel,
+      setupMs: _setupMs,
+      packMs: _packMs,
+      stage: _stage,
+      done: List<int>.from(_done),
       rev: DateTime.now()
           .millisecondsSinceEpoch, // unique per push, survives host reload
     );
@@ -481,6 +572,7 @@ class _TimerPageState extends State<TimerPage>
       }
     }
     setState(() {});
+    _loopTick();
   }
 
   /// Plays [asset] (or vibrates when null) and blinks the background [cycles]
@@ -526,6 +618,12 @@ class _TimerPageState extends State<TimerPage>
       _totalCtl.text = (_total.inSeconds / 60).toString();
       _warnCtl.text = (_warn.inSeconds / 60).toString();
       _qaCtl.text = (_qa.inSeconds / 60).toString();
+      _setupCtl.text = (s.setupMs / 60000).toString();
+      _packCtl.text = (s.packMs / 60000).toString();
+      _stage = s.stage;
+      _done
+        ..clear()
+        ..addAll(s.done);
       _inQa = s.inQa;
       _groups = List<Group>.from(s.groups);
       _gi = s.gi;
@@ -583,6 +681,10 @@ class _TimerPageState extends State<TimerPage>
         _warn = Duration(milliseconds: s.warnMs);
         _qa = Duration(milliseconds: s.qaMs);
         _inQa = s.inQa;
+        _stage = s.stage;
+        _done
+          ..clear()
+          ..addAll(s.done);
         _groups = List<Group>.from(s.groups);
         _gi = s.gi;
         _finished = s.finished;
@@ -632,6 +734,8 @@ class _TimerPageState extends State<TimerPage>
     _totalCtl.dispose();
     _warnCtl.dispose();
     _qaCtl.dispose();
+    _setupCtl.dispose();
+    _packCtl.dispose();
     _rosterCtl.dispose();
     _notesCtl.dispose();
     _breakCtl.dispose();
@@ -659,12 +763,23 @@ class _TimerPageState extends State<TimerPage>
           _field(_totalCtl, 'Talk time'),
           _field(_warnCtl, 'Warning before end'),
           _field(_qaCtl, 'Q&A time'),
+          if (widget.sync != null && !widget.viewer) ...[
+            _field(_setupCtl, 'Setup'),
+            _field(_packCtl, 'Pack'),
+          ],
         ],
       ),
       SizedBox(
         width: 320,
         child: TextField(
           controller: _rosterCtl,
+          onChanged: widget.sync != null && _idle && _stage.isEmpty
+              ? (_) => setState(() {
+                  _groups = parseRoster(_rosterCtl.text);
+                  _gi = 0;
+                  _si = 0;
+                })
+              : null,
           maxLines: 5,
           keyboardType: TextInputType.multiline,
           decoration: const InputDecoration(
@@ -792,8 +907,43 @@ class _TimerPageState extends State<TimerPage>
                         label: const Text('Viewer link'),
                       ),
                     if (widget.sync != null)
+                      FilledButton(
+                        onPressed:
+                            _idle &&
+                                _groups.isNotEmpty &&
+                                _stage.isEmpty &&
+                                !_finished
+                            ? () {
+                                _groups = parseRoster(_rosterCtl.text);
+                                _done.clear();
+                                _log.clear();
+                                _enter('draw');
+                              }
+                            : null,
+                        child: const Text('Start session'),
+                      ),
+                    if (widget.sync != null && _stage.isNotEmpty) ...[
+                      OutlinedButton(
+                        onPressed: () => _enter(_nextStage),
+                        child: const Text('Skip'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          _stage = '';
+                          _spinAtMs = null;
+                          _breakEndMs = null;
+                          _reset();
+                        },
+                        child: const Text('Stop loop'),
+                      ),
+                    ],
+                    if (widget.sync != null)
                       FilledButton.icon(
-                        onPressed: (_idle && _groups.length >= 2 && !_finished)
+                        onPressed:
+                            (_idle &&
+                                _groups.length >= 2 &&
+                                !_finished &&
+                                _stage.isEmpty)
                             ? _spin
                             : null,
                         icon: const Icon(Icons.casino),
@@ -801,13 +951,17 @@ class _TimerPageState extends State<TimerPage>
                       ),
                     if (widget.sync != null)
                       OutlinedButton.icon(
-                        onPressed: _idle ? _breakDialog : null,
+                        onPressed: _idle && _stage.isEmpty
+                            ? _breakDialog
+                            : null,
                         icon: const Icon(Icons.free_breakfast),
                         label: const Text('Break'),
                       ),
                     if (widget.sync != null)
                       OutlinedButton.icon(
-                        onPressed: _idle ? _setupDialog : null,
+                        onPressed: _idle && _stage.isEmpty
+                            ? _setupDialog
+                            : null,
                         icon: const Icon(Icons.swap_horiz),
                         label: const Text('Setup'),
                       ),
