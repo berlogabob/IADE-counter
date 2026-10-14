@@ -663,38 +663,40 @@ class _TimerPageState extends State<TimerPage>
     }
   }
 
+  /// Viewer and professor invite links, side by side.
+  Widget _linksRow() => Row(
+    children: [
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: () => _showLink(
+            'Viewer link',
+            '/view/${widget.readToken ?? widget.sync!.token}',
+          ),
+          icon: const Icon(Icons.qr_code),
+          label: const Text('Viewer link'),
+        ),
+      ),
+      const SizedBox(width: 8),
+      Expanded(
+        child: OutlinedButton.icon(
+          onPressed: widget.juryToken == null
+              ? null
+              : () => _showLink(
+                  'Professor link',
+                  '/jury/${widget.juryToken}/${widget.readToken}',
+                ),
+          icon: const Icon(Icons.qr_code),
+          label: const Text('Professor link'),
+        ),
+      ),
+    ],
+  );
+
   /// Host side column: professors who joined (top) and the teams (bottom).
-  Widget _sidePanel() => Column(
+  Widget _sidePanel({bool links = true}) => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Row(
-        children: [
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _showLink(
-                'Viewer link',
-                '/view/${widget.readToken ?? widget.sync!.token}',
-              ),
-              icon: const Icon(Icons.qr_code),
-              label: const Text('Viewer link'),
-            ),
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: widget.juryToken == null
-                  ? null
-                  : () => _showLink(
-                      'Professor link',
-                      '/jury/${widget.juryToken}/${widget.readToken}',
-                    ),
-              icon: const Icon(Icons.qr_code),
-              label: const Text('Professor link'),
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 8),
+      if (links) ...[_linksRow(), const SizedBox(height: 8)],
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -1012,6 +1014,7 @@ class _TimerPageState extends State<TimerPage>
                 ? MainAxisSize.min
                 : MainAxisSize.max,
             children: [
+              if (host && !wide) ...[_linksRow(), const SizedBox(height: 8)],
               if (_stage.isEmpty)
                 Text(
                   _idle ? student : '${_inQa ? 'Q&A' : 'Talk'} · $student',
@@ -1120,14 +1123,14 @@ class _TimerPageState extends State<TimerPage>
                     ],
                   ],
                 ),
-              if (_groups.isNotEmpty) ...[
+              if (!widget.viewer && _groups.isNotEmpty) ...[
                 const SizedBox(height: 24),
                 ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
                   child: _notesTile(),
                 ),
               ],
-              if (host && !wide) _sidePanel(),
+              if (host && !wide) _sidePanel(links: false),
             ],
           ),
         ),

@@ -259,7 +259,8 @@ class _AdminPageState extends State<AdminPage> {
     })
     m,
   ) {
-    final host = '${m.base}#/host/${m.edit}/${m.notes}/${m.read}/${m.profs}/${m.jury}';
+    final host =
+        '${m.base}#/host/${m.edit}/${m.notes}/${m.read}/${m.profs}/${m.jury}';
     final jury = '${m.base}#/jury/${m.jury}/${m.read}';
     final viewer = '${m.base}#/view/${m.read}';
     return [
