@@ -30,10 +30,11 @@ class _AdminPageState extends State<AdminPage> {
   int _step = 0;
   late List<String> _tokens;
   final _days = TextEditingController(text: '3');
+  final _profs = TextEditingController(text: '2');
 
   String _status = '';
   bool _busy = false;
-  ({String host, String jury, String viewer})? _result;
+  ({String host, List<String> jury, String viewer})? _result;
 
   @override
   void dispose() {
@@ -42,6 +43,7 @@ class _AdminPageState extends State<AdminPage> {
       field.dispose();
     }
     _days.dispose();
+    _profs.dispose();
     super.dispose();
   }
 
@@ -82,7 +84,14 @@ class _AdminPageState extends State<AdminPage> {
         _status = 'Expiry in days must be a whole number between 1 and 30.';
         return;
       }
-      final r = await http.post(Uri.parse('${Sync.worker}/new?days=$days'));
+      final profs = int.tryParse(_profs.text.trim());
+      if (profs == null || profs < 0 || profs > 9) {
+        _status = 'Other professors must be a number from 0 to 9.';
+        return;
+      }
+      final r = await http.post(
+        Uri.parse('${Sync.worker}/new?days=$days&profs=$profs'),
+      );
       final body = jsonDecode(r.body);
       if (r.statusCode != 200 || body is! Map || body['edit'] is! String) {
         _status =
@@ -110,7 +119,10 @@ class _AdminPageState extends State<AdminPage> {
       );
       _result = (
         host: '$base#/host/${body['edit']}/${body['notes']}/${body['read']}',
-        jury: '$base#/jury/${body['notes']}/${body['read']}',
+        jury: [
+          for (final t in (body['jury'] as List? ?? const []))
+            '$base#/jury/$t/${body['read']}',
+        ],
         viewer: '$base#/view/${body['read']}',
       );
       _status = '';
@@ -199,6 +211,15 @@ class _AdminPageState extends State<AdminPage> {
                       labelText: 'Links expire after (days)',
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: _profs,
+                    enabled: !_busy && _result == null,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Other professors on the jury (0 to 9)',
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   if (_busy) const Center(child: CircularProgressIndicator()),
                   const SizedBox(height: 16),
@@ -212,11 +233,13 @@ class _AdminPageState extends State<AdminPage> {
                       'Keep this one to yourself. It starts, skips and stops the session.',
                     ),
                     const SizedBox(height: 16),
-                    ..._links(
-                      _result!.jury,
-                      'Jury link (other professors: follow and write notes)',
-                    ),
-                    const SizedBox(height: 16),
+                    for (var i = 0; i < _result!.jury.length; i++) ...[
+                      ..._links(
+                        _result!.jury[i],
+                        'Professor ${i + 2} (follows and writes own notes)',
+                      ),
+                      const SizedBox(height: 16),
+                    ],
                     ..._links(
                       _result!.viewer,
                       'Viewer link (students, projector)',

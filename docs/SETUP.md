@@ -27,3 +27,10 @@ should return JSON with `edit`, `notes`, `read`. Revoke the app password in the 
 
 ## Task runner
 `tasks/PLAN.md`, `tasks/Txx.md`, `tasks/run.sh Txx` (runs `pi` or `codex`, gates the diff, commits, logs to `tasks/LOG.md`).
+
+## Files per session (for the report generator)
+Nextcloud folder `sessions/s-xxxxxxxx/` (admin account):
+- `state.json`: latest snapshot. `groups` (presenters, planned time), `log` (one line per presenter: `<n>  talk MM:SS (+over)  Q&A MM:SS`, with `start +/-N min` for the first of a group), `done` (indexes of presenters that finished), timing fields (`totalMs`, `warnMs`, `qaMs`, `setupMs`, `packMs`).
+- `notes.json`: host's notes, `{ "<presenter name>": "text" }`.
+- `notes-p1.json`, `notes-p2.json`, ...: one file per other professor, same format. Professor N+1 writes only `notes-pN.json`, so nobody overwrites anybody.
+Shares expire after the chosen number of days; the files stay in Nextcloud. A report generator can read them over WebDAV with the admin app password.

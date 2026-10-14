@@ -34,7 +34,7 @@ export default {
   },
 };
 
-// Creates sessions/<random>/{state,notes}.json and three shares; returns the tokens.
+// Creates sessions/<random>/{state,notes,notes-pN}.json and their shares; returns the tokens.
 // shortcut: no caller check beyond Origin (curl can fake it); add a Cloudflare rate-limit rule if it gets abused.
 async function newSession(env, url, cors) {
   const json = (o, status = 200) =>
@@ -42,13 +42,15 @@ async function newSession(env, url, cors) {
   const auth = 'Basic ' + btoa(`${env.NC_USER}:${env.NC_PASS}`);
   const nc = (path, init) => fetch(NC + path, { ...init, headers: { Authorization: auth, ...init.headers } });
   const days = Math.min(30, Math.max(1, parseInt(url.searchParams.get('days')) || 3));
+  const profs = Math.min(9, Math.max(0, parseInt(url.searchParams.get('profs')) || 0));
   const name = 's-' + [...crypto.getRandomValues(new Uint8Array(6))].map((b) => (b % 36).toString(36)).join('');
   const dav = `/remote.php/dav/files/${env.NC_USER}/sessions`;
   try {
     await nc(dav, { method: 'MKCOL' }); // 405 = already there
     let r = await nc(`${dav}/${name}`, { method: 'MKCOL' });
     if (r.status !== 201) return json({ error: `folder: HTTP ${r.status}` }, 502);
-    for (const f of ['state.json', 'notes.json']) {
+    const jury = Array.from({ length: profs }, (_, i) => `notes-p${i + 1}.json`);
+    for (const f of ['state.json', 'notes.json', ...jury]) {
       r = await nc(`${dav}/${name}/${f}`, { method: 'PUT', body: '{}', headers: { 'Content-Type': 'application/json' } });
       if (r.status !== 201 && r.status !== 204) return json({ error: `file: HTTP ${r.status}` }, 502);
     }
@@ -63,7 +65,9 @@ async function newSession(env, url, cors) {
       if (res.status !== 200 || typeof token !== 'string') throw new Error(`share: HTTP ${res.status}`);
       return token;
     };
-    return json({ edit: await share('state.json', 3), notes: await share('notes.json', 3), read: await share('state.json', 1) });
+    const out = { edit: await share('state.json', 3), notes: await share('notes.json', 3), read: await share('state.json', 1), jury: [] };
+    for (const f of jury) out.jury.push(await share(f, 3)); // one notes file per professor, so nobody overwrites anybody
+    return json(out);
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);
   }
