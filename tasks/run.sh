@@ -12,7 +12,7 @@ prompt="Do tasks/$T.md exactly. Edit ONLY these files: $files. Do not edit pubsp
 case $runner in
   pi)    PI_VERIFY="flutter analyze && flutter test" PI_MAX_ITERS=2 PI_TIMEOUT=900 \
            ~/.claude/skills/pi-delegate/scripts/pi-run.sh "$prompt Do not try to run commands; a wrapper runs analyze and tests after you finish." $F ${files//,/ } >/tmp/$T.log 2>&1 ;;
-  codex) codex exec -s workspace-write -C . "$prompt Then run 'flutter analyze' and 'flutter test' and fix any failure." >/tmp/$T.log 2>&1 ;;
+  codex) codex exec -s workspace-write -C . "$prompt Then run 'flutter analyze' and 'flutter test' and fix any failure." >/tmp/$T.log 2>&1 </dev/null ;;
   *) echo "bad runner"; exit 2 ;;
 esac
 status=OK; why=""
