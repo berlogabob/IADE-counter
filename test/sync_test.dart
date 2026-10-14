@@ -4,6 +4,28 @@ import 'package:http/testing.dart';
 import 'package:iade_counter/sync.dart';
 
 void main() {
+  test(
+    'putText sends one at a time and keeps only the newest queued text',
+    () async {
+      final bodies = <String>[];
+      final s = Sync(
+        't',
+        client: MockClient((request) async {
+          bodies.add(request.body);
+          if (bodies.length == 1) {
+            await Future<void>.delayed(const Duration(milliseconds: 50));
+          }
+          return http.Response('', 200);
+        }),
+      );
+      s.putText('a');
+      s.putText('b');
+      s.putText('c');
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+      expect(bodies, ['a', 'c']);
+    },
+  );
+
   test('httpDateToEpoch parses the server date', () {
     expect(
       Sync.httpDateToEpoch('Tue, 13 Oct 2026 16:03:27 GMT'),

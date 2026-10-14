@@ -20,6 +20,8 @@ class Sync {
 
   int offsetMs = 0; // server clock minus local clock
   String? _etag;
+  String? _queued;
+  bool _sending = false;
 
   int nowMs() => DateTime.now().millisecondsSinceEpoch + offsetMs;
 
@@ -55,14 +57,25 @@ class Sync {
   /// Write the share's raw body. Failures are swallowed: the host keeps
   /// running offline; a failed push is not a failure.
   Future<void> putText(String text) async {
+    _queued = text;
+    if (_sending) return;
+    _sending = true;
     try {
-      await _http.put(
-        Uri.parse(_url),
-        headers: {'content-type': 'text/plain'},
-        body: text,
-      );
-    } catch (_) {
-      // host keeps running offline; a failed push is not a failure
+      while (_queued != null) {
+        final body = _queued!;
+        _queued = null;
+        try {
+          await _http.put(
+            Uri.parse(_url),
+            headers: {'content-type': 'text/plain'},
+            body: body,
+          );
+        } catch (_) {
+          // host keeps running offline; a failed push is not a failure
+        }
+      }
+    } finally {
+      _sending = false;
     }
   }
 
