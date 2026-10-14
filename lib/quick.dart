@@ -6,6 +6,7 @@ import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'cycle.dart';
 import 'phase.dart';
+import 'theme.dart';
 
 class QuickPage extends StatefulWidget {
   const QuickPage({super.key});
@@ -157,14 +158,10 @@ class _QuickPageState extends State<QuickPage> {
     final warning = running && _cycle!.warning(_stage, _remaining);
     return Scaffold(
       backgroundColor: !running
-          ? const Color(0xFF10151C)
-          : switch (_stage) {
-              Stage.setup => const Color(0xFF1565C0),
-              Stage.talk =>
-                warning ? const Color(0xFFB36B00) : const Color(0xFF2E7D32),
-              Stage.qa => const Color(0xFF6A1B9A),
-              Stage.pack => const Color(0xFF455A64),
-            },
+          ? calmColor
+          : warning
+          ? warnColor
+          : stageColor(_stage.name),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24),

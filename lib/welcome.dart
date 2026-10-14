@@ -2,13 +2,14 @@ import 'package:flutter/material.dart';
 
 import 'admin.dart';
 import 'quick.dart';
+import 'theme.dart';
 
 class WelcomePage extends StatelessWidget {
   const WelcomePage({super.key});
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF10151C),
+    backgroundColor: calmColor,
     body: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,

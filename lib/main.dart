@@ -14,6 +14,7 @@ import 'loop.dart';
 import 'phase.dart';
 import 'session.dart';
 import 'sync.dart';
+import 'theme.dart';
 import 'wheel.dart';
 import 'welcome.dart';
 
@@ -27,7 +28,7 @@ void main() {
     MaterialApp(
       title: 'Defence Timer',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark(useMaterial3: true),
+      theme: appTheme(),
       home: parsed.role == 'admin'
           ? const AdminPage()
           : parsed.tokens.isNotEmpty
@@ -72,8 +73,6 @@ class TimerPage extends StatefulWidget {
 
 class _TimerPageState extends State<TimerPage>
     with SingleTickerProviderStateMixin {
-  static const _calm = Color(0xFF10151C);
-  static const _amber = Color(0xFFB36B00);
   static const _red = Color(0xFFD00000);
 
   // Presets come from the page URL (?total=15&warn=1&qa=10); Android has none.
@@ -866,8 +865,8 @@ class _TimerPageState extends State<TimerPage>
       animation: _blink,
       builder: (context, child) => Scaffold(
         backgroundColor: switch (_phase) {
-          Phase.running => _calm,
-          Phase.warning => Color.lerp(_calm, _amber, _blink.value),
+          Phase.running => stageColor(_stage),
+          Phase.warning => Color.lerp(calmColor, warnColor, _blink.value),
           Phase.done => Color.lerp(Colors.black, _red, _blink.value),
         },
         // Setup: one compact block centred both ways, scrolls if it doesn't fit.
@@ -891,6 +890,16 @@ class _TimerPageState extends State<TimerPage>
                 _idle ? student : '${_inQa ? 'Q&A' : 'Talk'} · $student',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
+              if (_stage == 'talk' || _stage == 'qa')
+                Text(
+                  '${_stage == 'qa' ? 'Q&A' : 'Presentation'}'
+                  '${_groups.isNotEmpty ? ' · ${_groups[_gi].name}' : ''}',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: MediaQuery.sizeOf(context).shortestSide * 0.06,
+                  ),
+                ),
               if (widget.viewer || !_idle)
                 Expanded(child: clock)
               else
@@ -1103,7 +1112,11 @@ class _TimerPageState extends State<TimerPage>
       );
       final overtime = remaining <= Duration.zero;
       return Container(
-        color: _calm,
+        color: switch (_breakLabel) {
+          'Setup' => stageColor('setup'),
+          'Pack' => stageColor('pack'),
+          _ => calmColor,
+        },
         child: LayoutBuilder(
           builder: (context, constraints) {
             final side = min(constraints.maxWidth, constraints.maxHeight);
