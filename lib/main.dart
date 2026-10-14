@@ -14,6 +14,7 @@ import 'phase.dart';
 import 'session.dart';
 import 'sync.dart';
 import 'wheel.dart';
+import 'welcome.dart';
 
 void main() {
   // Route by URL fragment: /admin opens the admin page, /host/<edit>[/<notes>]
@@ -28,14 +29,16 @@ void main() {
       theme: ThemeData.dark(useMaterial3: true),
       home: parsed.role == 'admin'
           ? const AdminPage()
-          : TimerPage(
-              sync: parsed.tokens.isNotEmpty ? Sync(parsed.tokens[0]) : null,
+          : parsed.tokens.isNotEmpty
+          ? TimerPage(
+              sync: Sync(parsed.tokens[0]),
               notesSync: parsed.tokens.length > 1
                   ? Sync(parsed.tokens[1])
                   : null,
               readToken: parsed.tokens.length > 2 ? parsed.tokens[2] : null,
               viewer: parsed.role == 'viewer',
-            ),
+            )
+          : const WelcomePage(),
     ),
   );
 }
