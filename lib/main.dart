@@ -742,8 +742,6 @@ class _TimerPageState extends State<TimerPage>
           ),
         ),
       ),
-      if (MediaQuery.sizeOf(context).width >= 900 && _groups.isNotEmpty)
-        Card(child: _notesTile()),
     ],
   );
 
@@ -1059,7 +1057,7 @@ class _TimerPageState extends State<TimerPage>
                                 _enter('draw');
                               }
                             : null,
-                        child: const Text('Draw first team'),
+                        child: const Text('Start defences'),
                       ),
                     if (widget.sync != null && !_closed)
                       TextButton(
@@ -1122,7 +1120,13 @@ class _TimerPageState extends State<TimerPage>
                     ],
                   ],
                 ),
-              if (!(host && wide) && _groups.isNotEmpty) _notesTile(),
+              if (_groups.isNotEmpty) ...[
+                const SizedBox(height: 24),
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: _notesTile(),
+                ),
+              ],
               if (host && !wide) _sidePanel(),
             ],
           ),
