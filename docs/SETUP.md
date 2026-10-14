@@ -34,3 +34,4 @@ Nextcloud folder `sessions/s-xxxxxxxx/` (admin account):
 - `notes.json`: host's notes, `{ "<presenter name>": "text" }`.
 - `notes-p1.json`, `notes-p2.json`, ...: one file per other professor, same format. Professor N+1 writes only `notes-pN.json`, so nobody overwrites anybody.
 Shares expire after the chosen number of days; the files stay in Nextcloud. A report generator can read them over WebDAV with the admin app password.
+Each notes file may also hold the reserved key `"_professor": "Name"`, the name that professor typed in the Notes panel (absent until typed).

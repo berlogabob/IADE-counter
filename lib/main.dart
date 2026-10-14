@@ -120,6 +120,7 @@ class _TimerPageState extends State<TimerPage>
 
   final _rosterCtl = TextEditingController();
   final _notesCtl = TextEditingController();
+  final _profCtl = TextEditingController();
   List<Group> _groups = [];
   int _gi = 0; // current group index
   int _si = 0; // current student index within the group
@@ -748,6 +749,7 @@ class _TimerPageState extends State<TimerPage>
     _setupCtl.dispose();
     _packCtl.dispose();
     _rosterCtl.dispose();
+    _profCtl.dispose();
     _notesCtl.dispose();
     _breakCtl.dispose();
     WakelockPlus.disable();
@@ -1201,14 +1203,27 @@ class _TimerPageState extends State<TimerPage>
 
   /// Host-only notes editor: one ExpansionTile bound to the current group's
   /// note. Without a notes token the notes live in memory only.
+  // Reserved key in this professor's notes file; the report generator reads it.
+  static const _profKey = '_professor';
+
   Widget _notesTile() {
     final group = _groups[_gi];
     if (_notesCtl.text != (_notes[group.name] ?? '')) {
       _notesCtl.text = _notes[group.name] ?? '';
     }
+    if (_profCtl.text != (_notes[_profKey] ?? '')) {
+      _profCtl.text = _notes[_profKey] ?? '';
+    }
     return ExpansionTile(
       title: const Text('Notes'),
       children: [
+        TextField(
+          controller: _profCtl,
+          decoration: const InputDecoration(
+            labelText: 'Your name (saved with your notes)',
+          ),
+          onChanged: (value) => _onNotesChanged(_profKey, value),
+        ),
         TextField(
           controller: _notesCtl,
           maxLines: 4,
