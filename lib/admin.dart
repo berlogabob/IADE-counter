@@ -77,10 +77,11 @@ class _AdminPageState extends State<AdminPage> {
   Future<void> _create() async {
     _status = '';
     setState(() => _busy = true);
+    final name = _name.text.trim();
+    var folderMade = false;
     try {
       final user = _user.text.trim();
       final pass = _pass.text;
-      final name = _name.text.trim();
       final daysRaw = _days.text.trim();
 
       if (user.isEmpty || pass.isEmpty) {
@@ -114,6 +115,7 @@ class _AdminPageState extends State<AdminPage> {
       if (mkSession.statusCode != 201) {
         throw 'session failed: HTTP ${mkSession.statusCode} ${mkSession.body}';
       }
+      folderMade = true;
 
       setState(() => _status = 'Writing files...');
       for (final file in ['state.json', 'notes.json']) {
@@ -146,9 +148,13 @@ class _AdminPageState extends State<AdminPage> {
       _result = (host: host, viewer: viewer);
       _status = 'Done.';
     } on String catch (e) {
-      _status = e;
+      _status = folderMade
+          ? '$e. The folder sessions/$name may exist: delete it in Nextcloud or choose another name.'
+          : e;
     } catch (_) {
-      _status = 'Something went wrong.';
+      _status = folderMade
+          ? 'Something went wrong. The folder sessions/$name may exist: delete it in Nextcloud or choose another name.'
+          : 'Something went wrong.';
     } finally {
       // Also repaints the message set by an early return above.
       if (mounted) {
