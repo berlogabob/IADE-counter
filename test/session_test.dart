@@ -2,6 +2,40 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iade_counter/session.dart';
 
 void main() {
+  test('snapshot roundtrips setup, pack, stage and done', () {
+    const s = Snapshot(
+      totalMs: 900000,
+      warnMs: 60000,
+      qaMs: 600000,
+      student: 1,
+      setupMs: 180000,
+      packMs: 90000,
+      stage: 'pack',
+      done: [0, 2],
+    );
+    expect(Snapshot.fromJson(s.toJson()), s);
+  });
+  test('old snapshot JSON loads new field defaults', () {
+    final s = Snapshot.fromJson({});
+    expect(s.setupMs, 120000);
+    expect(s.packMs, 60000);
+    expect(s.stage, '');
+    expect(s.done, isEmpty);
+  });
+  test('snapshot done compares and hashes list contents', () {
+    final done = [0, 2];
+    final a = Snapshot.fromJson({'done': done});
+    final b = Snapshot.fromJson({'done': List<int>.of(done)});
+    expect(a, b);
+    expect(a.hashCode, b.hashCode);
+    expect(a, isNot(Snapshot.fromJson({'done': done.reversed.toList()})));
+  });
+  test('snapshot stage roundtrips', () {
+    for (final stage in ['', 'setup', 'talk', 'qa', 'pack', 'draw']) {
+      final s = Snapshot.fromJson({'stage': stage});
+      expect(Snapshot.fromJson(s.toJson()).stage, stage);
+    }
+  });
   test('parseRoute: /admin is the admin role with no tokens', () {
     final r = parseRoute('/admin');
     expect(r.role, 'admin');

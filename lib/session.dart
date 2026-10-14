@@ -110,6 +110,10 @@ class Snapshot {
     this.spinWinner = 0,
     this.breakEndMs,
     this.breakLabel = 'Break',
+    this.setupMs = 120000,
+    this.packMs = 60000,
+    this.stage = '',
+    this.done = const [],
     this.rev = 0,
   });
 
@@ -151,6 +155,18 @@ class Snapshot {
   /// Title of that countdown: 'Break' or 'Setup'.
   final String breakLabel;
 
+  /// Setup length, ms.
+  final int setupMs;
+
+  /// Pack length, ms.
+  final int packMs;
+
+  /// Current stage: '', 'setup', 'talk', 'qa', 'pack' or 'draw'.
+  final String stage;
+
+  /// Indexes into [groups] of finished presenters, hidden everywhere.
+  final List<int> done;
+
   /// Host increments on every push; viewer applies a snapshot only when it
   /// differs from the last one it applied.
   final int rev;
@@ -175,10 +191,14 @@ class Snapshot {
       spinWinner == other.spinWinner &&
       breakEndMs == other.breakEndMs &&
       breakLabel == other.breakLabel &&
+      setupMs == other.setupMs &&
+      packMs == other.packMs &&
+      stage == other.stage &&
+      _listEquals(done, other.done) &&
       rev == other.rev;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
     endMs,
     pausedMs,
     inQa,
@@ -195,8 +215,12 @@ class Snapshot {
     spinWinner,
     breakEndMs,
     breakLabel,
+    setupMs,
+    packMs,
+    stage,
+    Object.hashAll(done),
     rev,
-  );
+  ]);
 
   Map<String, dynamic> toJson() => {
     'endMs': endMs,
@@ -215,6 +239,10 @@ class Snapshot {
     'spinWinner': spinWinner,
     'breakEndMs': breakEndMs,
     'breakLabel': breakLabel,
+    'setupMs': setupMs,
+    'packMs': packMs,
+    'stage': stage,
+    'done': done,
     'rev': rev,
   };
 
@@ -239,6 +267,10 @@ class Snapshot {
     spinWinner: json['spinWinner'] as int? ?? 0,
     breakEndMs: json['breakEndMs'] as int?,
     breakLabel: json['breakLabel'] as String? ?? 'Break',
+    setupMs: json['setupMs'] as int? ?? 120000,
+    packMs: json['packMs'] as int? ?? 60000,
+    stage: json['stage'] as String? ?? '',
+    done: (json['done'] as List?)?.cast<int>() ?? const [],
     rev: json['rev'] as int? ?? 0,
   );
 
