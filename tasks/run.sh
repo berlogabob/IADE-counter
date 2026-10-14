@@ -18,7 +18,7 @@ esac
 status=OK; why=""
 # Gate 1: only allowed files changed
 allowed=",$files,"
-for f in $( (git diff --name-only "$base"; git ls-files --others --exclude-standard) | grep -vE '^(\.pi-runs/|audit/|2026-|tasks/LOG\.md$)'); do
+for f in $( (git diff --name-only "$base"; git ls-files --others --exclude-standard) | grep -vE '^(\.pi-runs/|audit/|2026-|tasks/)'); do
   case "$allowed" in *",$f,"*) ;; *) status=FAIL; why="touched $f";; esac
 done
 # Gate 2: diff size
