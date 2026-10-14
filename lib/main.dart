@@ -622,6 +622,14 @@ class _TimerPageState extends State<TimerPage>
           ),
         ),
       ),
+      if (kIsWeb && widget.sync == null)
+        FilledButton.icon(
+          onPressed: () => Navigator.of(context).push(
+            MaterialPageRoute<void>(builder: (_) => const AdminPage()),
+          ),
+          icon: const Icon(Icons.add),
+          label: const Text('New session'),
+        ),
       if (kIsWeb)
         TextButton.icon(
           onPressed: () => _copy(
