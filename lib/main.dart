@@ -138,7 +138,9 @@ class _TimerPageState extends State<TimerPage>
   // The wheel is live while its spin+hold window is open and there are enough
   // groups to make a wheel. Everything is derived from [spinAtMs].
   bool get _wheelActive {
-    if (_spinAtMs == null || _groups.length < 2) return false;
+    if (_spinAtMs == null || remaining(_groups.length, _done).length < 2) {
+      return false;
+    }
     final elapsed = widget.sync!.nowMs() - _spinAtMs!;
     return elapsed >= 0 &&
         elapsed <= spinMs.inMilliseconds + holdMs.inMilliseconds;
@@ -410,7 +412,9 @@ class _TimerPageState extends State<TimerPage>
   /// pushes the snapshot; the wheel animates from the timestamps everywhere.
   void _spin() {
     if (!_idle || _groups.length < 2) return;
-    _spinTo(Random().nextInt(_groups.length));
+    final winner = drawNext(_groups.length, _done, Random());
+    if (winner == null) return;
+    _spinTo(winner);
   }
 
   void _spinTo(int winner) {
@@ -941,7 +945,7 @@ class _TimerPageState extends State<TimerPage>
                       FilledButton.icon(
                         onPressed:
                             (_idle &&
-                                _groups.length >= 2 &&
+                                remaining(_groups.length, _done).length >= 2 &&
                                 !_finished &&
                                 _stage.isEmpty)
                             ? _spin
@@ -1026,6 +1030,14 @@ class _TimerPageState extends State<TimerPage>
   /// The spinning wheel, shown while its spin+hold window is open.
   Widget _wheelOverlay() => Builder(
     builder: (context) {
+      final pool = wheelPool(
+        _groups.map((g) => g.name).toList(),
+        _done,
+        _spinWinner,
+      );
+      if (pool.winnerSlot < 0 || pool.labels.isEmpty) {
+        return const SizedBox.shrink();
+      }
       final theme = Theme.of(context);
       final elapsed = widget.sync!.nowMs() - _spinAtMs!;
       final spinning = elapsed < spinMs.inMilliseconds;
@@ -1041,10 +1053,10 @@ class _TimerPageState extends State<TimerPage>
                   CustomPaint(
                     size: Size(side * 0.8, side * 0.8),
                     painter: WheelPainter(
-                      labels: _groups.map((g) => g.name).toList(),
+                      labels: pool.labels,
                       angle: wheelAngle(
-                        _groups.length,
-                        _spinWinner,
+                        pool.labels.length,
+                        pool.winnerSlot,
                         elapsed / spinMs.inMilliseconds,
                       ),
                       colourA: theme.colorScheme.primary,
@@ -1061,6 +1073,14 @@ class _TimerPageState extends State<TimerPage>
                           fontSize: side * 0.1,
                           fontWeight: FontWeight.bold,
                         ),
+                      ),
+                    ),
+                  if (!spinning)
+                    Text(
+                      '${pool.labels.length - 1} left',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: side * 0.04,
                       ),
                     ),
                 ],

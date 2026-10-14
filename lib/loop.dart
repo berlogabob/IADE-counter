@@ -6,6 +6,20 @@ List<int> remaining(int count, List<int> done) => [
     if (!done.contains(i)) i,
 ];
 
+/// The wheel's slices: names of the presenters not in [done] (original order) and
+/// the slice index of [winner] (an index into [names]); winnerSlot is -1 if the winner is in [done] or out of range.
+({List<String> labels, int winnerSlot}) wheelPool(
+  List<String> names,
+  List<int> done,
+  int winner,
+) {
+  final left = remaining(names.length, done);
+  return (
+    labels: [for (final i in left) names[i]],
+    winnerSlot: left.indexOf(winner),
+  );
+}
+
 /// A random remaining index; null when none is left.
 int? drawNext(int count, List<int> done, Random rnd) {
   final left = remaining(count, done);

@@ -4,6 +4,29 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iade_counter/loop.dart';
 
 void main() {
+  test(
+    'wheelPool keeps all names and the winner slot when nothing is done',
+    () {
+      final pool = wheelPool(['A', 'B', 'C'], [], 1);
+      expect(pool.labels, ['A', 'B', 'C']);
+      expect(pool.winnerSlot, 1);
+    },
+  );
+  test('wheelPool removes done names and shifts the winner slot', () {
+    final pool = wheelPool(['A', 'B', 'C', 'D'], [0, 2], 3);
+    expect(pool.labels, ['B', 'D']);
+    expect(pool.winnerSlot, 1);
+  });
+  test('wheelPool has no winner slot for done or out-of-range winners', () {
+    for (final winner in [1, -1, 3]) {
+      final pool = wheelPool(['A', 'B', 'C'], [1], winner);
+      expect(pool.labels, ['A', 'C']);
+      expect(pool.winnerSlot, -1);
+    }
+    final empty = wheelPool([], [], 0);
+    expect(empty.labels, isEmpty);
+    expect(empty.winnerSlot, -1);
+  });
   test('remaining ignores done and out-of-range entries', () {
     expect(remaining(4, []), [0, 1, 2, 3]);
     expect(remaining(4, [2, 0, 2, -1, 4, 99]), [1, 3]);
