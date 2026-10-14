@@ -20,7 +20,7 @@ class AdminPage extends StatefulWidget {
 }
 
 class _AdminPageState extends State<AdminPage> {
-  static const _steps = ['Presenters', 'Timing', 'Invite', 'Start'];
+  static const _steps = ['Presenters', 'Timing', 'Share'];
   static const _labels = ['Setup', 'Presentation', 'Warning', 'Q&A', 'Pack'];
   final _roster = TextEditingController();
   final _times = [
@@ -28,13 +28,11 @@ class _AdminPageState extends State<AdminPage> {
       TextEditingController(text: value),
   ];
   int _step = 0;
-  late List<String> _tokens;
   final _days = TextEditingController(text: '3');
-  final _profs = TextEditingController(text: '2');
 
   String _status = '';
   bool _busy = false;
-  ({String host, List<String> jury, String viewer})? _result;
+  ({String edit, String notes, String read, String jury, String base})? _made;
 
   @override
   void dispose() {
@@ -43,13 +41,13 @@ class _AdminPageState extends State<AdminPage> {
       field.dispose();
     }
     _days.dispose();
-    _profs.dispose();
     super.dispose();
   }
 
   List<double?> get _minutes => _times
       .map((f) => double.tryParse(f.text.trim().replaceAll(',', '.')))
       .toList();
+
   void _next() {
     final m = _minutes;
     if (_step == 1 &&
@@ -63,7 +61,7 @@ class _AdminPageState extends State<AdminPage> {
       );
       return;
     }
-    if (_step == 2 && _result == null) {
+    if (_step == 2) {
       _create();
       return;
     }
@@ -84,14 +82,7 @@ class _AdminPageState extends State<AdminPage> {
         _status = 'Expiry in days must be a whole number between 1 and 30.';
         return;
       }
-      final profs = int.tryParse(_profs.text.trim());
-      if (profs == null || profs < 0 || profs > 9) {
-        _status = 'Other professors must be a number from 0 to 9.';
-        return;
-      }
-      final r = await http.post(
-        Uri.parse('${Sync.worker}/new?days=$days&profs=$profs'),
-      );
+      final r = await http.post(Uri.parse('${Sync.worker}/new?days=$days'));
       final body = jsonDecode(r.body);
       if (r.statusCode != 200 || body is! Map || body['edit'] is! String) {
         _status =
@@ -102,11 +93,15 @@ class _AdminPageState extends State<AdminPage> {
           .replace(fragment: '', query: '')
           .toString()
           .replaceAll('#', '');
-      _tokens = [
-        for (final key in ['edit', 'notes', 'read']) body[key] as String,
-      ];
+      final made = (
+        edit: body['edit'] as String,
+        notes: body['notes'] as String,
+        read: body['read'] as String,
+        jury: body['jury'] as String,
+        base: base,
+      );
       final ms = _minutes.map((v) => (v! * 60000).round()).toList();
-      await Sync(_tokens[0]).push(
+      await Sync(made.edit).push(
         Snapshot(
           groups: parseRoster(_roster.text),
           student: 1,
@@ -117,15 +112,7 @@ class _AdminPageState extends State<AdminPage> {
           packMs: ms[4],
         ),
       );
-      _result = (
-        host: '$base#/host/${body['edit']}/${body['notes']}/${body['read']}',
-        jury: [
-          for (final t in (body['jury'] as List? ?? const []))
-            '$base#/jury/$t/${body['read']}',
-        ],
-        viewer: '$base#/view/${body['read']}',
-      );
-      _status = '';
+      _made = made;
     } catch (_) {
       _status = 'Something went wrong. Check the connection and try again.';
     } finally {
@@ -142,38 +129,44 @@ class _AdminPageState extends State<AdminPage> {
 
   @override
   Widget build(BuildContext context) {
+    final made = _made;
     return Scaffold(
-      appBar: AppBar(title: Text('${_step + 1} of 4 · ${_steps[_step]}')),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              TextButton(
-                onPressed: _busy || _step == 0
-                    ? null
-                    : () => setState(() {
-                        if (_step < 3) _result = null;
-                        _status = '';
-                        _step--;
-                      }),
-                child: const Text('Back'),
-              ),
-              if (_step < 3)
-                FilledButton(
-                  onPressed:
-                      _busy || (_step == 0 && parseRoster(_roster.text).isEmpty)
-                      ? null
-                      : _next,
-                  child: Text(
-                    _step == 2 && _result == null ? 'Create session' : 'Next',
-                  ),
-                ),
-            ],
-          ),
+      appBar: AppBar(
+        title: Text(
+          made == null
+              ? 'Step ${_step + 1} of 3 · ${_steps[_step]}'
+              : 'Session ready',
         ),
       ),
+      bottomNavigationBar: made != null
+          ? null
+          : SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    TextButton(
+                      onPressed: _busy || _step == 0
+                          ? null
+                          : () => setState(() {
+                              _status = '';
+                              _step--;
+                            }),
+                      child: const Text('Back'),
+                    ),
+                    FilledButton(
+                      onPressed:
+                          _busy ||
+                              (_step == 0 && parseRoster(_roster.text).isEmpty)
+                          ? null
+                          : _next,
+                      child: Text(_step == 2 ? 'Create session' : 'Next'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -182,16 +175,27 @@ class _AdminPageState extends State<AdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_step == 0)
+                if (made == null && _step == 0) ...[
                   TextField(
                     controller: _roster,
-                    maxLines: 6,
+                    minLines: 10,
+                    maxLines: 10,
                     onChanged: (_) => setState(() {}),
                     decoration: const InputDecoration(
-                      labelText: 'One name per line (team, group or student)',
+                      alignLabelWithHint: true,
+                      border: OutlineInputBorder(),
+                      labelText: 'Presenters: one name per line',
+                      hintText: 'Team A\nTeam B\nTeam C',
                     ),
                   ),
-                if (_step == 1)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Text(
+                      '${parseRoster(_roster.text).length} presenters',
+                    ),
+                  ),
+                ],
+                if (made == null && _step == 1)
                   for (var i = 0; i < _times.length; i++)
                     TextField(
                       controller: _times[i],
@@ -202,78 +206,23 @@ class _AdminPageState extends State<AdminPage> {
                         labelText: '${_labels[i]} (minutes)',
                       ),
                     ),
-                if (_step == 2) ...[
+                if (made == null && _step == 2) ...[
                   TextField(
                     controller: _days,
-                    enabled: !_busy && _result == null,
+                    enabled: !_busy,
                     keyboardType: TextInputType.number,
                     decoration: const InputDecoration(
                       labelText: 'Links expire after (days)',
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: _profs,
-                    enabled: !_busy && _result == null,
-                    keyboardType: TextInputType.number,
-                    decoration: const InputDecoration(
-                      labelText: 'Other professors on the jury (0 to 9)',
-                    ),
-                  ),
                   const SizedBox(height: 16),
                   if (_busy) const Center(child: CircularProgressIndicator()),
-                  const SizedBox(height: 16),
-                  if (_result != null) ...[
-                    const SizedBox(height: 24),
-                    ..._links(
-                      _result!.host,
-                      'Host link (only you: controls and notes)',
-                    ),
-                    const Text(
-                      'Keep this one to yourself. It starts, skips and stops the session.',
-                    ),
-                    const SizedBox(height: 16),
-                    for (var i = 0; i < _result!.jury.length; i++) ...[
-                      ..._links(
-                        _result!.jury[i],
-                        'Professor ${i + 2} (follows and writes own notes)',
-                      ),
-                      const SizedBox(height: 16),
-                    ],
-                    ..._links(
-                      _result!.viewer,
-                      'Viewer link (students, projector)',
-                    ),
-                    const Text(
-                      'Show this QR on the projector or send it to students',
-                    ),
-                  ],
                 ],
+                if (made != null) ..._share(made),
                 if (_status.isNotEmpty)
                   SelectableText(
                     _status,
                     style: TextStyle(color: Colors.red[700]),
-                  ),
-                if (_step == 2 && _status.isNotEmpty)
-                  TextButton(
-                    onPressed: _busy ? null : _create,
-                    child: const Text('Retry'),
-                  ),
-                if (_step == 3)
-                  FilledButton(
-                    onPressed: () => Navigator.of(context).pushReplacement(
-                      MaterialPageRoute<void>(
-                        builder: (_) => TimerPage(
-                          sync: Sync(_tokens[0]),
-                          notesSync: Sync(_tokens[1]),
-                          readToken: _tokens[2],
-                        ),
-                      ),
-                    ),
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.all(24),
-                    ),
-                    child: const Text('Open host screen'),
                   ),
               ],
             ),
@@ -283,22 +232,83 @@ class _AdminPageState extends State<AdminPage> {
     );
   }
 
-  List<Widget> _links(String url, String label) => [
-    Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
-    const SizedBox(height: 4),
-    SelectableText(url),
-    const SizedBox(height: 8),
-    Wrap(
-      spacing: 8,
-      children: [
-        TextButton.icon(
-          onPressed: () => _copy(url),
-          icon: const Icon(Icons.copy),
-          label: const Text('Copy'),
+  /// The three links as three clear cards: host, professors, students.
+  List<Widget> _share(
+    ({String edit, String notes, String read, String jury, String base}) m,
+  ) {
+    final host = '${m.base}#/host/${m.edit}/${m.notes}/${m.read}';
+    final jury = '${m.base}#/jury/${m.jury}/${m.read}';
+    final viewer = '${m.base}#/view/${m.read}';
+    return [
+      _card(
+        'You: host',
+        'Runs the session: start, skip, stop, close. Keep this link private.',
+        host,
+        extra: FilledButton.icon(
+          onPressed: () => Navigator.of(context).pushReplacement(
+            MaterialPageRoute<void>(
+              builder: (_) => TimerPage(
+                sync: Sync(m.edit),
+                notesSync: Sync(m.notes),
+                readToken: m.read,
+              ),
+            ),
+          ),
+          icon: const Icon(Icons.play_arrow),
+          label: const Text('Open host screen'),
+          style: FilledButton.styleFrom(minimumSize: const Size(0, 56)),
         ),
-      ],
+      ),
+      _card(
+        'Other professors',
+        'One link for all of them. Each enters their name and writes their own notes.',
+        jury,
+        qr: 170,
+      ),
+      _card(
+        'Students and projector',
+        'Read-only: the clock and the draw.',
+        viewer,
+        qr: 240,
+      ),
+    ];
+  }
+
+  Widget _card(
+    String title,
+    String hint,
+    String url, {
+    Widget? extra,
+    double? qr,
+  }) => Card(
+    margin: const EdgeInsets.only(bottom: 16),
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 4),
+          Text(hint, style: Theme.of(context).textTheme.bodySmall),
+          if (extra != null) ...[const SizedBox(height: 12), extra],
+          if (qr != null) ...[
+            const SizedBox(height: 12),
+            Center(
+              child: QrImageView(
+                data: url,
+                size: qr,
+                backgroundColor: Colors.white,
+              ),
+            ),
+          ],
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => _copy(url),
+            icon: const Icon(Icons.copy),
+            label: const Text('Copy link'),
+          ),
+        ],
+      ),
     ),
-    const SizedBox(height: 8),
-    QrImageView(data: url, size: 200, backgroundColor: Colors.white),
-  ];
+  );
 }

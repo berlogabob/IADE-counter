@@ -15,6 +15,7 @@ import 'phase.dart';
 import 'session.dart';
 import 'sync.dart';
 import 'theme.dart';
+import 'join.dart';
 import 'wheel.dart';
 import 'welcome.dart';
 
@@ -32,12 +33,7 @@ void main() {
       home: parsed.role == 'admin'
           ? const AdminPage()
           : parsed.role == 'jury'
-          ? TimerPage(
-              sync: Sync(parsed.tokens[1]),
-              notesSync: Sync(parsed.tokens[0]),
-              readToken: parsed.tokens[1],
-              viewer: true,
-            )
+          ? JoinPage(juryToken: parsed.tokens[0], readToken: parsed.tokens[1])
           : parsed.tokens.isNotEmpty
           ? TimerPage(
               sync: Sync(parsed.tokens[0]),
@@ -59,6 +55,7 @@ class TimerPage extends StatefulWidget {
     this.notesSync,
     this.readToken,
     this.viewer = false,
+    this.professor,
   });
 
   /// Null for the standalone timer; set for host (push) and viewer (mirror).
@@ -73,6 +70,9 @@ class TimerPage extends StatefulWidget {
 
   /// True when mirroring a host's timer rather than running one.
   final bool viewer;
+
+  /// Jury member's name from the join page; saved into their notes file.
+  final String? professor;
 
   @override
   State<TimerPage> createState() => _TimerPageState();
@@ -696,7 +696,7 @@ class _TimerPageState extends State<TimerPage>
   Future<void> _loadNotes() async {
     final raw = await widget.notesSync?.getText();
     if (mounted) setState(() => _notesLoaded = true);
-    if (raw == null) return;
+    if (raw == null) return _seedName();
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
@@ -710,6 +710,14 @@ class _TimerPageState extends State<TimerPage>
     } catch (_) {
       // ignore bad JSON
     }
+    _seedName();
+  }
+
+  /// Jury: write the name typed on the join page unless the file already has one.
+  void _seedName() {
+    final name = widget.professor;
+    if (name == null || !mounted || (_notes[_profKey] ?? '').isNotEmpty) return;
+    _onNotesChanged(_profKey, name);
   }
 
   /// Viewer: poll the host every second and mirror a new snapshot (rev changed).

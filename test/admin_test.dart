@@ -30,7 +30,7 @@ void main() {
   });
   testWidgets('timing shows all five defaults', (tester) async {
     await timing(tester);
-    expect(find.text('2 of 4 · Timing'), findsOneWidget);
+    expect(find.text('Step 2 of 3 · Timing'), findsOneWidget);
     expect(
       tester
           .widgetList<TextField>(find.byType(TextField))
@@ -43,7 +43,7 @@ void main() {
     await tester.enterText(find.byType(TextField).at(2), '20');
     await tester.tap(find.text('Next'));
     await tester.pump();
-    expect(find.text('2 of 4 · Timing'), findsOneWidget);
+    expect(find.text('Step 2 of 3 · Timing'), findsOneWidget);
     expect(
       tester.widget<SelectableText>(find.byType(SelectableText)).style!.color,
       Colors.red[700],
