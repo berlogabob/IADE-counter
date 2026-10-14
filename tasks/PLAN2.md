@@ -13,7 +13,8 @@ Look: dark, one colour per phase (setup blue, talk green, warning amber, Q&A pur
 | T10 | lib/cycle.dart: Stage enum + Cycle (lengths, next with loop, skip zero-length, warning) + tests | codex |
 | T11 | Welcome page + Quick timer page (lib/welcome.dart, lib/quick.dart); default route = Welcome | codex |
 | T12 | Snapshot: setupMs, packMs, stage, done list; roundtrip tests | codex |
-| T13 | Host loop: auto-advance stages, draw between presenters, mark done | codex |
-| T14 | Wheel + name list show only remaining presenters; done hidden on all screens | codex |
-| T15 | Wizard replaces AdminPage (4 steps) and the host setup column | codex |
-| T16 | Theme: phase colours, big type, viewer screen cleanup | pi |
+| T13 | lib/loop.dart: pure helpers `remaining`, `drawNext`, `nextStage` + tests | codex |
+| T14 | Host wiring in main.dart: stage machine driven by a host timer, Skip button, Start session, restore | codex |
+| T15 | Wheel + name list show only remaining presenters; done hidden on all screens | codex |
+| T16 | Wizard replaces AdminPage (4 steps) and the host setup column; setup coefficient per presenter | codex |
+| T17 | Theme: phase colours, big type, viewer screen cleanup | pi |
