@@ -111,6 +111,7 @@ void main() {
       spinWinner: 2,
       breakEndMs: 1_700_000_060_000,
       breakLabel: 'Setup',
+      closed: true,
       rev: 7,
     );
     expect(Snapshot.fromJson(s.toJson()), s);

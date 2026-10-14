@@ -119,12 +119,13 @@ class _TimerPageState extends State<TimerPage>
   final _log = <String>[];
 
   final _rosterCtl = TextEditingController();
-  final _notesCtl = TextEditingController();
   final _profCtl = TextEditingController();
   List<Group> _groups = [];
   int _gi = 0; // current group index
   int _si = 0; // current student index within the group
   bool _finished = false; // past the last group's last student
+  bool _closed = false; // host closed the session: notes are locked
+  bool _notesLoaded = false; // re-keys the note fields once the file is read
   Map<String, String> _notes = {}; // group name -> note text
   int? _startDelta; // host: start +/- minutes for the current student
 
@@ -522,6 +523,36 @@ class _TimerPageState extends State<TimerPage>
     );
   }
 
+  /// Host: lock every note and stop the loop. Soft lock: the app refuses edits, the links still work for anyone who bypasses it.
+  void _confirmClose() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Close the session?'),
+        content: const Text(
+          'Notes are locked for everyone and the loop stops.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _stage = '';
+              _spinAtMs = null;
+              _breakEndMs = null;
+              _closed = true;
+              _reset();
+            },
+            child: const Text('Close session'),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Host: end the break so the overlay disappears everywhere.
   void _endBreak() {
     if (_stage == 'setup' || _stage == 'pack') {
@@ -555,6 +586,7 @@ class _TimerPageState extends State<TimerPage>
       spinWinner: _spinWinner,
       breakEndMs: _breakEndMs,
       breakLabel: _breakLabel,
+      closed: _closed,
       setupMs: _setupMs,
       packMs: _packMs,
       stage: _stage,
@@ -648,6 +680,7 @@ class _TimerPageState extends State<TimerPage>
       _spinWinner = s.spinWinner;
       _breakEndMs = s.breakEndMs;
       _breakLabel = s.breakLabel;
+      _closed = s.closed;
       _paused = s.pausedMs == null ? null : Duration(milliseconds: s.pausedMs!);
       // shortcut: talk time before a Q&A is not stored, so a reload during Q&A
       // logs it as 0; store it in the snapshot if that matters.
@@ -662,6 +695,7 @@ class _TimerPageState extends State<TimerPage>
   /// Bad JSON is ignored; without a notes token the notes live in memory only.
   Future<void> _loadNotes() async {
     final raw = await widget.notesSync?.getText();
+    if (mounted) setState(() => _notesLoaded = true);
     if (raw == null) return;
     try {
       final decoded = jsonDecode(raw);
@@ -705,6 +739,7 @@ class _TimerPageState extends State<TimerPage>
         _spinWinner = s.spinWinner;
         _breakEndMs = s.breakEndMs;
         _breakLabel = s.breakLabel;
+        _closed = s.closed;
         _end = s.endMs == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(
@@ -750,7 +785,6 @@ class _TimerPageState extends State<TimerPage>
     _packCtl.dispose();
     _rosterCtl.dispose();
     _profCtl.dispose();
-    _notesCtl.dispose();
     _breakCtl.dispose();
     WakelockPlus.disable();
     super.dispose();
@@ -861,6 +895,7 @@ class _TimerPageState extends State<TimerPage>
         : _groups.isEmpty
         ? 'Student #${_log.length + 1}'
         : '${_groups[_gi].name} · ${_studentNameInGroup()}';
+    if (widget.viewer && widget.notesSync != null) return _juryScaffold(time);
     final clock = FittedBox(
       child: Text(
         time,
@@ -936,6 +971,7 @@ class _TimerPageState extends State<TimerPage>
                             _idle &&
                                 _groups.isNotEmpty &&
                                 _stage.isEmpty &&
+                                !_closed &&
                                 !_finished
                             ? () {
                                 if (_rosterCtl.text.trim().isNotEmpty) {
@@ -947,6 +983,11 @@ class _TimerPageState extends State<TimerPage>
                               }
                             : null,
                         child: const Text('Start session'),
+                      ),
+                    if (widget.sync != null && !_closed)
+                      TextButton(
+                        onPressed: _confirmClose,
+                        child: const Text('Close session'),
                       ),
                     if (widget.sync != null && _stage.isNotEmpty) ...[
                       OutlinedButton(
@@ -1207,31 +1248,104 @@ class _TimerPageState extends State<TimerPage>
   static const _profKey = '_professor';
 
   Widget _notesTile() {
-    final group = _groups[_gi];
-    if (_notesCtl.text != (_notes[group.name] ?? '')) {
-      _notesCtl.text = _notes[group.name] ?? '';
-    }
     if (_profCtl.text != (_notes[_profKey] ?? '')) {
       _profCtl.text = _notes[_profKey] ?? '';
     }
-    return ExpansionTile(
-      title: const Text('Notes'),
-      children: [
-        TextField(
-          controller: _profCtl,
-          decoration: const InputDecoration(
-            labelText: 'Your name (saved with your notes)',
-          ),
-          onChanged: (value) => _onNotesChanged(_profKey, value),
-        ),
-        TextField(
-          controller: _notesCtl,
-          maxLines: 4,
+    return ExpansionTile(title: const Text('Notes'), children: _noteFields());
+  }
+
+  /// Your name plus one editable note per presenter, all locked once the host closes the session.
+  List<Widget> _noteFields() => [
+    TextField(
+      controller: _profCtl,
+      enabled: !_closed,
+      decoration: const InputDecoration(
+        labelText: 'Your name (saved with your notes)',
+      ),
+      onChanged: (value) => _onNotesChanged(_profKey, value),
+    ),
+    for (var i = 0; i < _groups.length; i++)
+      Padding(
+        padding: const EdgeInsets.only(top: 12),
+        child: TextFormField(
+          key: ValueKey('${_groups[i].name}|$_notesLoaded'),
+          initialValue: _notes[_groups[i].name] ?? '',
+          enabled: !_closed,
+          maxLines: 3,
           keyboardType: TextInputType.multiline,
-          decoration: InputDecoration(labelText: 'Notes for ${group.name}'),
-          onChanged: (value) => _onNotesChanged(group.name, value),
+          decoration: InputDecoration(
+            labelText:
+                '${_groups[i].name}${_done.contains(i) ? '  (done)' : ''}',
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: (value) => _onNotesChanged(_groups[i].name, value),
         ),
-      ],
+      ),
+    if (_closed)
+      const Padding(
+        padding: EdgeInsets.only(top: 8),
+        child: Text('Session closed: notes are locked.'),
+      ),
+  ];
+
+  /// Other professors: a small timer on top, then every presenter's note.
+  Widget _juryScaffold(String time) {
+    final label = _closed
+        ? 'Closed'
+        : _finished
+        ? 'All done'
+        : switch (_stage) {
+            'setup' => 'Setup',
+            'talk' => 'Presentation',
+            'qa' => 'Q&A',
+            'pack' => 'Pack',
+            'draw' => 'Draw',
+            _ => 'Waiting',
+          };
+    if (_profCtl.text != (_notes[_profKey] ?? '')) {
+      _profCtl.text = _notes[_profKey] ?? '';
+    }
+    return Scaffold(
+      backgroundColor: calmColor,
+      body: _stack(
+        SafeArea(
+          child: Column(
+            children: [
+              Container(
+                color: stageColor(_stage),
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '$label${_groups.isNotEmpty && _stage.isNotEmpty ? ' · ${_groups[_gi].name}' : ''}',
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    Text(
+                      time,
+                      style: const TextStyle(
+                        fontSize: 40,
+                        fontWeight: FontWeight.bold,
+                        fontFeatures: [FontFeature.tabularFigures()],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView(
+                  padding: const EdgeInsets.all(16),
+                  children: _noteFields(),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
