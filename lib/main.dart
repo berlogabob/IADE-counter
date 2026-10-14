@@ -1087,13 +1087,13 @@ class _TimerPageState extends State<TimerPage>
                         icon: const Icon(Icons.free_breakfast),
                         label: const Text('Break'),
                       ),
-                    if (_end == null)
+                    if (_end == null && !(widget.sync != null && _idle))
                       FilledButton.icon(
                         onPressed: _start,
                         icon: const Icon(Icons.play_arrow),
                         label: Text(_idle ? 'Start' : 'Resume'),
                       )
-                    else
+                    else if (_end != null)
                       FilledButton.icon(
                         onPressed: _pause,
                         icon: const Icon(Icons.pause),
