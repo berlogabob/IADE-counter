@@ -41,6 +41,9 @@ void main() {
                   ? Sync(parsed.tokens[1])
                   : null,
               readToken: parsed.tokens.length > 2 ? parsed.tokens[2] : null,
+              profsSync: parsed.tokens.length > 3
+                  ? Sync(parsed.tokens[3])
+                  : null,
               viewer: parsed.role == 'viewer',
             )
           : const WelcomePage(),
@@ -56,6 +59,7 @@ class TimerPage extends StatefulWidget {
     this.readToken,
     this.viewer = false,
     this.professor,
+    this.profsSync,
   });
 
   /// Null for the standalone timer; set for host (push) and viewer (mirror).
@@ -70,6 +74,9 @@ class TimerPage extends StatefulWidget {
 
   /// True when mirroring a host's timer rather than running one.
   final bool viewer;
+
+  /// Host only: read-only share of professors.json (who has joined).
+  final Sync? profsSync;
 
   /// Jury member's name from the join page; saved into their notes file.
   final String? professor;
@@ -120,6 +127,9 @@ class _TimerPageState extends State<TimerPage>
 
   final _rosterCtl = TextEditingController();
   final _profCtl = TextEditingController();
+  Timer? _rosterTimer; // host: debounce before pushing edited teams
+  Timer? _profsTimer; // host: poll who has joined
+  List<String> _joined = [];
   List<Group> _groups = [];
   int _gi = 0; // current group index
   int _si = 0; // current student index within the group
@@ -649,6 +659,7 @@ class _TimerPageState extends State<TimerPage>
     } else {
       _restore(); // host: learn the server clock offset and resume a reloaded session
       _loadNotes(); // host: load notes for the current share
+      _pollProfs();
     }
     _ensureRepaint(); // repaint so overlays follow the server clock
   }
@@ -675,6 +686,7 @@ class _TimerPageState extends State<TimerPage>
         ..addAll(s.done);
       _inQa = s.inQa;
       _groups = List<Group>.from(s.groups);
+      _rosterCtl.text = _rosterText(_groups);
       _gi = s.gi;
       _si = s.si;
       _finished = s.finished;
@@ -694,6 +706,99 @@ class _TimerPageState extends State<TimerPage>
     if (s.endMs != null) {
       _run(Duration(milliseconds: s.endMs! - widget.sync!.nowMs()));
     }
+  }
+
+  /// Host side column: professors who joined (top) and the teams (bottom).
+  Widget _sidePanel() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
+    children: [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Professors (${_joined.length})',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              if (_joined.isEmpty)
+                const Text('Nobody has joined yet.')
+              else
+                for (final n in _joined) Text(n),
+            ],
+          ),
+        ),
+      ),
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Teams (${_done.length} of ${_groups.length} done)',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: _rosterCtl,
+                onChanged: widget.sync != null && !widget.viewer
+                    ? _rosterEdited
+                    : null,
+                minLines: 6,
+                maxLines: 14,
+                keyboardType: TextInputType.multiline,
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  helperText: 'One team per line. Add new teams at the end.',
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ],
+  );
+
+  /// The teams as editable text, the inverse of parseRoster.
+  static String _rosterText(List<Group> groups) => groups
+      .map(
+        (g) =>
+            '${g.planned.isEmpty ? '' : '${g.planned} '}${g.name}'
+            '${g.students.isEmpty ? '' : ': ${g.students.join(', ')}'}',
+      )
+      .join('\n');
+
+  /// Host: the teams box changed; update locally and push shortly after, so
+  /// viewers and professors see added or renamed teams.
+  void _rosterEdited(String text) {
+    setState(() {
+      _groups = parseRoster(text);
+      if (_gi >= _groups.length) _gi = _groups.isEmpty ? 0 : _groups.length - 1;
+    });
+    _rosterTimer?.cancel();
+    _rosterTimer = Timer(const Duration(seconds: 1), _push);
+  }
+
+  /// Host: every few seconds, read who has joined from professors.json.
+  void _pollProfs() {
+    final sync = widget.profsSync;
+    if (sync == null) return;
+    Future<void> once() async {
+      final raw = await sync.getText();
+      if (raw == null || !mounted) return;
+      try {
+        final names = (jsonDecode(raw) as Map)['names'] as List? ?? const [];
+        setState(() => _joined = names.map((e) => e.toString()).toList());
+      } catch (_) {
+        // ignore bad JSON
+      }
+    }
+
+    once();
+    _profsTimer = Timer.periodic(const Duration(seconds: 5), (_) => once());
   }
 
   /// Host only: decode the notes share (group name -> text) into memory.
@@ -798,6 +903,8 @@ class _TimerPageState extends State<TimerPage>
     _packCtl.dispose();
     _rosterCtl.dispose();
     _profCtl.dispose();
+    _rosterTimer?.cancel();
+    _profsTimer?.cancel();
     _breakCtl.dispose();
     WakelockPlus.disable();
     super.dispose();
@@ -820,58 +927,14 @@ class _TimerPageState extends State<TimerPage>
         spacing: 24,
         alignment: WrapAlignment.center,
         children: [
-          _field(_totalCtl, 'Talk time'),
+          if (widget.sync != null && !widget.viewer) _field(_setupCtl, 'Setup'),
+          _field(_totalCtl, 'Presentation'),
           _field(_warnCtl, 'Warning before end'),
-          _field(_qaCtl, 'Q&A time'),
-          if (widget.sync != null && !widget.viewer) ...[
-            _field(_setupCtl, 'Setup'),
-            _field(_packCtl, 'Pack'),
-          ],
+          _field(_qaCtl, 'Q&A'),
+          if (widget.sync != null && !widget.viewer) _field(_packCtl, 'Pack'),
         ],
       ),
-      SizedBox(
-        width: 320,
-        child: TextField(
-          controller: _rosterCtl,
-          onChanged: widget.sync != null && _idle && _stage.isEmpty
-              ? (_) => setState(() {
-                  _groups = parseRoster(_rosterCtl.text);
-                  _gi = 0;
-                  _si = 0;
-                })
-              : null,
-          maxLines: 5,
-          keyboardType: TextInputType.multiline,
-          decoration: const InputDecoration(
-            labelText: 'Groups (one per line)',
-            helperText: '14:30 Group A: Ana, Rui — time and names optional',
-          ),
-        ),
-      ),
-      if (kIsWeb && widget.sync == null)
-        FilledButton.icon(
-          onPressed: () => Navigator.of(context)
-              .push(MaterialPageRoute<void>(builder: (_) => const AdminPage())),
-          icon: const Icon(Icons.add),
-          label: const Text('New session'),
-        ),
-      if (kIsWeb)
-        TextButton.icon(
-          onPressed: () => _copy(
-            Uri.base
-                .replace(
-                  queryParameters: {
-                    'total': _totalCtl.text,
-                    'warn': _warnCtl.text,
-                    'qa': _qaCtl.text,
-                  },
-                )
-                .toString(),
-          ),
-          icon: const Icon(Icons.link),
-          label: const Text('Copy link with these times'),
-        )
-      else
+      if (!kIsWeb)
         SizedBox(
           width: 320,
           child: SwitchListTile(
@@ -909,6 +972,8 @@ class _TimerPageState extends State<TimerPage>
         ? 'Student #${_log.length + 1}'
         : _who();
     if (widget.viewer && widget.notesSync != null) return _juryScaffold(time);
+    final host = widget.sync != null && !widget.viewer;
+    final wide = MediaQuery.sizeOf(context).width >= 900;
     final clock = FittedBox(
       child: Text(
         time,
@@ -931,7 +996,26 @@ class _TimerPageState extends State<TimerPage>
         // Running: the clock fills the screen. The roulette/break overlays sit
         // on top of all of it while they are live.
         body: _stack(
-          (widget.viewer || !_idle)
+          host && wide
+              ? Row(
+                  children: [
+                    Expanded(
+                      child: !_idle
+                          ? SizedBox.expand(child: child)
+                          : Center(child: SingleChildScrollView(child: child)),
+                    ),
+                    SizedBox(
+                      width: 340,
+                      child: SafeArea(
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.fromLTRB(0, 16, 16, 16),
+                          child: _sidePanel(),
+                        ),
+                      ),
+                    ),
+                  ],
+                )
+              : (widget.viewer || !_idle)
               ? SizedBox.expand(child: child)
               : Center(child: SingleChildScrollView(child: child)),
         ),
@@ -1081,6 +1165,7 @@ class _TimerPageState extends State<TimerPage>
               if ((!widget.viewer || widget.notesSync != null) &&
                   _groups.isNotEmpty)
                 _notesTile(),
+              if (host && !wide) _sidePanel(),
             ],
           ),
         ),

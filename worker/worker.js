@@ -49,8 +49,8 @@ async function newSession(env, url, cors) {
     await nc(dav, { method: 'MKCOL' }); // 405 = already there
     let r = await nc(`${dav}/${name}`, { method: 'MKCOL' });
     if (r.status !== 201) return json({ error: `folder: HTTP ${r.status}` }, 502);
-    for (const f of ['state.json', 'notes.json', 'jury.json']) {
-      r = await nc(`${dav}/${name}/${f}`, { method: 'PUT', body: '{}', headers: { 'Content-Type': 'application/json' } });
+    for (const f of ['state.json', 'notes.json', 'jury.json', 'professors.json']) {
+      r = await nc(`${dav}/${name}/${f}`, { method: 'PUT', body: f === 'professors.json' ? '{"names":[]}' : '{}', headers: { 'Content-Type': 'application/json' } });
       if (r.status !== 201 && r.status !== 204) return json({ error: `file: HTTP ${r.status}` }, 502);
     }
     const expire = new Date(Date.now() + days * 864e5).toISOString().slice(0, 10);
@@ -64,7 +64,7 @@ async function newSession(env, url, cors) {
       if (res.status !== 200 || typeof token !== 'string') throw new Error(`share: HTTP ${res.status}`);
       return token;
     };
-    return json({ edit: await share('state.json', 3), notes: await share('notes.json', 3), read: await share('state.json', 1), jury: await share('jury.json', 1) });
+    return json({ edit: await share('state.json', 3), notes: await share('notes.json', 3), read: await share('state.json', 1), jury: await share('jury.json', 1), profs: await share('professors.json', 1) });
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);
   }
@@ -88,7 +88,17 @@ async function join(env, url, cors) {
     if (!j) return json({ error: 'link expired or unknown' }, 404);
     const file = j.path.replace(/jury\.json$/, `notes-${slug}.json`);
     const have = all.find((s) => s.path === file && s.share_type === 3 && (s.permissions & 2));
-    if (have) return json({ notes: have.token });
+    const display = (url.searchParams.get('name') || '').trim().slice(0, 40);
+    const addName = async () => { // tell the host who joined; last write wins on a simultaneous join
+      const pf = `/remote.php/dav/files/${env.NC_USER}${j.path.replace(/jury\.json$/, 'professors.json')}`;
+      let names = [];
+      try { names = (await (await nc(pf, { method: 'GET', headers: {} })).json()).names || []; } catch (_) { /* start empty */ }
+      if (!names.includes(display)) {
+        names.push(display);
+        await nc(pf, { method: 'PUT', body: JSON.stringify({ names }), headers: { 'Content-Type': 'application/json' } });
+      }
+    };
+    if (have) { await addName(); return json({ notes: have.token }); }
     const r = await nc(`/remote.php/dav/files/${env.NC_USER}${file}`, {
       method: 'PUT', body: '{}', headers: { 'Content-Type': 'application/json', 'If-None-Match': '*' },
     });
@@ -101,6 +111,7 @@ async function join(env, url, cors) {
     });
     const token = (await res.json())?.ocs?.data?.token;
     if (res.status !== 200 || typeof token !== 'string') return json({ error: `share: HTTP ${res.status}` }, 502);
+    await addName();
     return json({ notes: token });
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);

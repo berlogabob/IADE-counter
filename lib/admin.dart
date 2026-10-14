@@ -21,7 +21,13 @@ class AdminPage extends StatefulWidget {
 
 class _AdminPageState extends State<AdminPage> {
   static const _steps = ['Presenters', 'Timing', 'Share'];
-  static const _labels = ['Setup', 'Presentation', 'Warning', 'Q&A', 'Pack'];
+  static const _labels = [
+    'Setup',
+    'Presentation',
+    'Warning before end',
+    'Q&A',
+    'Pack',
+  ];
   final _roster = TextEditingController();
   final _times = [
     for (final value in ['2', '15', '1', '10', '1'])
@@ -32,7 +38,15 @@ class _AdminPageState extends State<AdminPage> {
 
   String _status = '';
   bool _busy = false;
-  ({String edit, String notes, String read, String jury, String base})? _made;
+  ({
+    String edit,
+    String notes,
+    String read,
+    String jury,
+    String profs,
+    String base,
+  })?
+  _made;
 
   @override
   void dispose() {
@@ -98,6 +112,7 @@ class _AdminPageState extends State<AdminPage> {
         notes: body['notes'] as String,
         read: body['read'] as String,
         jury: body['jury'] as String,
+        profs: body['profs'] as String,
         base: base,
       );
       final ms = _minutes.map((v) => (v! * 60000).round()).toList();
@@ -234,9 +249,17 @@ class _AdminPageState extends State<AdminPage> {
 
   /// The three links as three clear cards: host, professors, students.
   List<Widget> _share(
-    ({String edit, String notes, String read, String jury, String base}) m,
+    ({
+      String edit,
+      String notes,
+      String read,
+      String jury,
+      String profs,
+      String base,
+    })
+    m,
   ) {
-    final host = '${m.base}#/host/${m.edit}/${m.notes}/${m.read}';
+    final host = '${m.base}#/host/${m.edit}/${m.notes}/${m.read}/${m.profs}';
     final jury = '${m.base}#/jury/${m.jury}/${m.read}';
     final viewer = '${m.base}#/view/${m.read}';
     return [
@@ -251,6 +274,7 @@ class _AdminPageState extends State<AdminPage> {
                 sync: Sync(m.edit),
                 notesSync: Sync(m.notes),
                 readToken: m.read,
+                profsSync: Sync(m.profs),
               ),
             ),
           ),
