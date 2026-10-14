@@ -665,7 +665,7 @@ class _TimerPageState extends State<TimerPage>
           maxLines: 5,
           keyboardType: TextInputType.multiline,
           decoration: const InputDecoration(
-            labelText: 'Roster (one group per line)',
+            labelText: 'Groups (one per line)',
             helperText: '14:30 Group A: Ana, Rui — time and names optional',
           ),
         ),
