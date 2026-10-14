@@ -31,6 +31,13 @@ void main() {
       theme: appTheme(),
       home: parsed.role == 'admin'
           ? const AdminPage()
+          : parsed.role == 'jury'
+          ? TimerPage(
+              sync: Sync(parsed.tokens[1]),
+              notesSync: Sync(parsed.tokens[0]),
+              readToken: parsed.tokens[1],
+              viewer: true,
+            )
           : parsed.tokens.isNotEmpty
           ? TimerPage(
               sync: Sync(parsed.tokens[0]),
@@ -600,6 +607,7 @@ class _TimerPageState extends State<TimerPage>
     super.initState();
     if (widget.viewer && widget.sync != null) {
       _startSync();
+      _loadNotes(); // jury link: notes only
     } else {
       _restore(); // host: learn the server clock offset and resume a reloaded session
       _loadNotes(); // host: load notes for the current share
@@ -886,10 +894,11 @@ class _TimerPageState extends State<TimerPage>
                 ? MainAxisSize.min
                 : MainAxisSize.max,
             children: [
-              Text(
-                _idle ? student : '${_inQa ? 'Q&A' : 'Talk'} · $student',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
+              if (_stage.isEmpty)
+                Text(
+                  _idle ? student : '${_inQa ? 'Q&A' : 'Talk'} · $student',
+                  style: Theme.of(context).textTheme.titleLarge,
+                ),
               if (_stage == 'talk' || _stage == 'qa')
                 Text(
                   '${_stage == 'qa' ? 'Q&A' : 'Presentation'}'
@@ -1013,7 +1022,9 @@ class _TimerPageState extends State<TimerPage>
                     ],
                   ],
                 ),
-              if (!widget.viewer && _groups.isNotEmpty) _notesTile(),
+              if ((!widget.viewer || widget.notesSync != null) &&
+                  _groups.isNotEmpty)
+                _notesTile(),
             ],
           ),
         ),

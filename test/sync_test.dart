@@ -67,9 +67,7 @@ void main() {
   test('poll returns null on non-JSON body', () async {
     final s = Sync(
       't',
-      client: MockClient(
-        (_) async => http.Response('not json', 200),
-      ),
+      client: MockClient((_) async => http.Response('not json', 200)),
     );
     expect(await s.poll(), isNull);
   });
@@ -77,9 +75,7 @@ void main() {
   test('poll returns null on malformed JSON', () async {
     final s = Sync(
       't',
-      client: MockClient(
-        (_) async => http.Response('{"endMs":"x"}', 200),
-      ),
+      client: MockClient((_) async => http.Response('{"endMs":"x"}', 200)),
     );
     expect(await s.poll(), isNull);
   });

@@ -2,6 +2,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:iade_counter/session.dart';
 
 void main() {
+  test('parseRoute: jury needs exactly two alphanumeric tokens', () {
+    expect(parseRoute('/jury/abc/def'), (role: 'jury', tokens: ['abc', 'def']));
+    expect(parseRoute('/jury/abc').role, 'standalone');
+    expect(parseRoute('/jury/abc/d-f').role, 'standalone');
+  });
+
   test('snapshot roundtrips setup, pack, stage and done', () {
     const s = Snapshot(
       totalMs: 900000,

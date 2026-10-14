@@ -24,7 +24,8 @@ class _AdminPageState extends State<AdminPage> {
   static const _labels = ['Setup', 'Presentation', 'Warning', 'Q&A', 'Pack'];
   final _roster = TextEditingController();
   final _times = [
-    for (final value in ['2', '15', '1', '10', '1']) TextEditingController(text: value),
+    for (final value in ['2', '15', '1', '10', '1'])
+      TextEditingController(text: value),
   ];
   int _step = 0;
   late List<String> _tokens;
@@ -32,30 +33,42 @@ class _AdminPageState extends State<AdminPage> {
 
   String _status = '';
   bool _busy = false;
-  ({String host, String viewer})? _result;
+  ({String host, String jury, String viewer})? _result;
 
   @override
   void dispose() {
     _roster.dispose();
-    for (final field in _times) { field.dispose(); }
+    for (final field in _times) {
+      field.dispose();
+    }
     _days.dispose();
     super.dispose();
   }
 
   List<double?> get _minutes => _times
-      .map((f) => double.tryParse(f.text.trim().replaceAll(',', '.'))).toList();
+      .map((f) => double.tryParse(f.text.trim().replaceAll(',', '.')))
+      .toList();
   void _next() {
     final m = _minutes;
-    if (_step == 1 && (m.any((v) => v == null || !v.isFinite || v < 0) ||
-        m[1]! <= 0 || m[2]! <= 0 || m[2]! >= m[1]!)) {
-      setState(() => _status = 'Check the times: 0 < warning < presentation, others 0 or more');
+    if (_step == 1 &&
+        (m.any((v) => v == null || !v.isFinite || v < 0) ||
+            m[1]! <= 0 ||
+            m[2]! <= 0 ||
+            m[2]! >= m[1]!)) {
+      setState(
+        () => _status =
+            'Check the times: 0 < warning < presentation, others 0 or more',
+      );
       return;
     }
     if (_step == 2 && _result == null) {
       _create();
       return;
     }
-    setState(() { _status = ''; _step++; });
+    setState(() {
+      _status = '';
+      _step++;
+    });
   }
 
   Future<void> _create() async {
@@ -80,15 +93,24 @@ class _AdminPageState extends State<AdminPage> {
           .replace(fragment: '', query: '')
           .toString()
           .replaceAll('#', '');
-      _tokens = [for (final key in ['edit', 'notes', 'read']) body[key] as String];
+      _tokens = [
+        for (final key in ['edit', 'notes', 'read']) body[key] as String,
+      ];
       final ms = _minutes.map((v) => (v! * 60000).round()).toList();
-      await Sync(_tokens[0]).push(Snapshot(
-        groups: parseRoster(_roster.text), student: 1,
-        totalMs: ms[1], warnMs: ms[2], qaMs: ms[3],
-        setupMs: ms[0], packMs: ms[4],
-      ));
+      await Sync(_tokens[0]).push(
+        Snapshot(
+          groups: parseRoster(_roster.text),
+          student: 1,
+          totalMs: ms[1],
+          warnMs: ms[2],
+          qaMs: ms[3],
+          setupMs: ms[0],
+          packMs: ms[4],
+        ),
+      );
       _result = (
         host: '$base#/host/${body['edit']}/${body['notes']}/${body['read']}',
+        jury: '$base#/jury/${body['notes']}/${body['read']}',
         viewer: '$base#/view/${body['read']}',
       );
       _status = '';
@@ -110,19 +132,36 @@ class _AdminPageState extends State<AdminPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text('${_step + 1} of 4 · ${_steps[_step]}')),
-      bottomNavigationBar: SafeArea(child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
-          TextButton(onPressed: _busy || _step == 0 ? null : () => setState(() {
-            if (_step < 3) _result = null;
-            _status = ''; _step--;
-          }), child: const Text('Back')),
-          if (_step < 3) FilledButton(
-            onPressed: _busy || (_step == 0 && parseRoster(_roster.text).isEmpty) ? null : _next,
-            child: Text(_step == 2 && _result == null ? 'Create session' : 'Next'),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              TextButton(
+                onPressed: _busy || _step == 0
+                    ? null
+                    : () => setState(() {
+                        if (_step < 3) _result = null;
+                        _status = '';
+                        _step--;
+                      }),
+                child: const Text('Back'),
+              ),
+              if (_step < 3)
+                FilledButton(
+                  onPressed:
+                      _busy || (_step == 0 && parseRoster(_roster.text).isEmpty)
+                      ? null
+                      : _next,
+                  child: Text(
+                    _step == 2 && _result == null ? 'Create session' : 'Next',
+                  ),
+                ),
+            ],
           ),
-        ]),
-      )),
+        ),
+      ),
       body: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 480),
@@ -131,52 +170,88 @@ class _AdminPageState extends State<AdminPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                if (_step == 0) TextField(
-                  controller: _roster, maxLines: 6,
-                  onChanged: (_) => setState(() {}),
-                  decoration: const InputDecoration(labelText: 'One name per line (team, group or student)'),
-                ),
-                if (_step == 1) for (var i = 0; i < _times.length; i++) TextField(
-                  controller: _times[i],
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  decoration: InputDecoration(labelText: '${_labels[i]} (minutes)'),
-                ),
+                if (_step == 0)
+                  TextField(
+                    controller: _roster,
+                    maxLines: 6,
+                    onChanged: (_) => setState(() {}),
+                    decoration: const InputDecoration(
+                      labelText: 'One name per line (team, group or student)',
+                    ),
+                  ),
+                if (_step == 1)
+                  for (var i = 0; i < _times.length; i++)
+                    TextField(
+                      controller: _times[i],
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: '${_labels[i]} (minutes)',
+                      ),
+                    ),
                 if (_step == 2) ...[
-                TextField(
-                  controller: _days,
-                  enabled: !_busy && _result == null,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'Links expire after (days)',
+                  TextField(
+                    controller: _days,
+                    enabled: !_busy && _result == null,
+                    keyboardType: TextInputType.number,
+                    decoration: const InputDecoration(
+                      labelText: 'Links expire after (days)',
+                    ),
                   ),
-                ),
-                const SizedBox(height: 16),
-                if (_busy) const Center(child: CircularProgressIndicator()),
-                const SizedBox(height: 16),
-                if (_result != null) ...[
-                  const SizedBox(height: 24),
-                  ..._links(
-                    _result!.host,
-                    'Host link (you and other professors: controls and notes)',
-                  ),
-                  const Text('Send this link to other professors so they can run the session too'),
                   const SizedBox(height: 16),
-                  ..._links(
-                    _result!.viewer,
-                    'Viewer link (students, projector)',
+                  if (_busy) const Center(child: CircularProgressIndicator()),
+                  const SizedBox(height: 16),
+                  if (_result != null) ...[
+                    const SizedBox(height: 24),
+                    ..._links(
+                      _result!.host,
+                      'Host link (only you: controls and notes)',
+                    ),
+                    const Text(
+                      'Keep this one to yourself. It starts, skips and stops the session.',
+                    ),
+                    const SizedBox(height: 16),
+                    ..._links(
+                      _result!.jury,
+                      'Jury link (other professors: follow and write notes)',
+                    ),
+                    const SizedBox(height: 16),
+                    ..._links(
+                      _result!.viewer,
+                      'Viewer link (students, projector)',
+                    ),
+                    const Text(
+                      'Show this QR on the projector or send it to students',
+                    ),
+                  ],
+                ],
+                if (_status.isNotEmpty)
+                  SelectableText(
+                    _status,
+                    style: TextStyle(color: Colors.red[700]),
                   ),
-                  const Text('Show this QR on the projector or send it to students'),
-                ],
-                ],
-                if (_status.isNotEmpty) SelectableText(_status, style: TextStyle(color: Colors.red[700])),
-                if (_step == 2 && _status.isNotEmpty) TextButton(onPressed: _busy ? null : _create, child: const Text('Retry')),
-                if (_step == 3) FilledButton(
-                  onPressed: () => Navigator.of(context).pushReplacement(MaterialPageRoute<void>(
-                    builder: (_) => TimerPage(sync: Sync(_tokens[0]), notesSync: Sync(_tokens[1]), readToken: _tokens[2]),
-                  )),
-                  style: FilledButton.styleFrom(padding: const EdgeInsets.all(24)),
-                  child: const Text('Open host screen'),
-                ),
+                if (_step == 2 && _status.isNotEmpty)
+                  TextButton(
+                    onPressed: _busy ? null : _create,
+                    child: const Text('Retry'),
+                  ),
+                if (_step == 3)
+                  FilledButton(
+                    onPressed: () => Navigator.of(context).pushReplacement(
+                      MaterialPageRoute<void>(
+                        builder: (_) => TimerPage(
+                          sync: Sync(_tokens[0]),
+                          notesSync: Sync(_tokens[1]),
+                          readToken: _tokens[2],
+                        ),
+                      ),
+                    ),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.all(24),
+                    ),
+                    child: const Text('Open host screen'),
+                  ),
               ],
             ),
           ),

@@ -313,6 +313,15 @@ class Snapshot {
     return (role: 'host', tokens: tokens);
   }
 
+  // Jury: other professors follow the session and write notes, nothing else.
+  if (fragment.startsWith('/jury/')) {
+    final segments = fragment.substring('/jury/'.length).split('/');
+    if (segments.length != 2 || !segments.every(tokenRe.hasMatch)) {
+      return (role: 'standalone', tokens: const []);
+    }
+    return (role: 'jury', tokens: segments); // [notes, read]
+  }
+
   if (fragment.startsWith('/view/')) {
     final token = fragment.substring('/view/'.length);
     if (!tokenRe.hasMatch(token)) return (role: 'standalone', tokens: const []);
