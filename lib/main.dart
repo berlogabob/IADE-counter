@@ -510,7 +510,7 @@ class _TimerPageState extends State<TimerPage>
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
         setState(() {
-          _notes = decoded.map((k, v) => MapEntry(k.toString(), v.toString()));
+          _notes = {...decoded.map((k, v) => MapEntry(k.toString(), v.toString())), ..._notes};
         });
       }
     } catch (_) {
