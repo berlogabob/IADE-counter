@@ -44,6 +44,7 @@ void main() {
               profsSync: parsed.tokens.length > 3
                   ? Sync(parsed.tokens[3])
                   : null,
+              juryToken: parsed.tokens.length > 4 ? parsed.tokens[4] : null,
               viewer: parsed.role == 'viewer',
             )
           : const WelcomePage(),
@@ -60,6 +61,7 @@ class TimerPage extends StatefulWidget {
     this.viewer = false,
     this.professor,
     this.profsSync,
+    this.juryToken,
   });
 
   /// Null for the standalone timer; set for host (push) and viewer (mirror).
@@ -77,6 +79,9 @@ class TimerPage extends StatefulWidget {
 
   /// Host only: read-only share of professors.json (who has joined).
   final Sync? profsSync;
+
+  /// Host only: the one professor invite link's token (5th host segment).
+  final String? juryToken;
 
   /// Jury member's name from the join page; saved into their notes file.
   final String? professor;
@@ -182,14 +187,12 @@ class _TimerPageState extends State<TimerPage>
   }
 
   /// Host only: show a QR (and the URL) a viewer can scan to mirror this timer.
-  void _shareLink() {
-    final url = Uri.base
-        .replace(fragment: '/view/${widget.readToken ?? widget.sync!.token}')
-        .toString();
+  void _showLink(String title, String fragment) {
+    final url = Uri.base.replace(fragment: fragment).toString();
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Viewer link'),
+        title: Text(title),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
@@ -431,15 +434,6 @@ class _TimerPageState extends State<TimerPage>
     if (advance && stage == _stage) _enter(_nextStage);
   }
 
-  /// Host: spin the roulette. Picks a random winner, stamps the start, and
-  /// pushes the snapshot; the wheel animates from the timestamps everywhere.
-  void _spin() {
-    if (!_idle || _groups.length < 2) return;
-    final winner = drawNext(_groups.length, _done, Random());
-    if (winner == null) return;
-    _spinTo(winner);
-  }
-
   void _spinTo(int winner) {
     _spinWinner = winner;
     _gi = winner;
@@ -497,45 +491,6 @@ class _TimerPageState extends State<TimerPage>
     _breakLabel = label;
     _push();
     _ensureRepaint();
-  }
-
-  /// Host: setup slot between groups, 2 min x a coefficient, run as a labelled break.
-  void _setupDialog() {
-    if (!_idle) return;
-    var coef = 1.0;
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setLocal) => AlertDialog(
-          title: const Text('Setup between groups'),
-          content: Wrap(
-            spacing: 8,
-            children: [
-              for (final c in const [0.5, 1.0, 1.5, 2.0, 3.0])
-                ChoiceChip(
-                  label: Text('x$c = ${c * 2} min'),
-                  selected: coef == c,
-                  onSelected: (_) => setLocal(() => coef = c),
-                ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                _breakCtl.text = '${coef * 2}';
-                _breakStart('Setup');
-                Navigator.of(context).pop();
-              },
-              child: const Text('Start'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 
   /// Host: lock every note and stop the loop. Soft lock: the app refuses edits, the links still work for anyone who bypasses it.
@@ -712,6 +667,34 @@ class _TimerPageState extends State<TimerPage>
   Widget _sidePanel() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showLink(
+                'Viewer link',
+                '/view/${widget.readToken ?? widget.sync!.token}',
+              ),
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Viewer link'),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: widget.juryToken == null
+                  ? null
+                  : () => _showLink(
+                      'Professor link',
+                      '/jury/${widget.juryToken}/${widget.readToken}',
+                    ),
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Professor link'),
+            ),
+          ),
+        ],
+      ),
+      const SizedBox(height: 8),
       Card(
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -759,6 +742,8 @@ class _TimerPageState extends State<TimerPage>
           ),
         ),
       ),
+      if (MediaQuery.sizeOf(context).width >= 900 && _groups.isNotEmpty)
+        Card(child: _notesTile()),
     ],
   );
 
@@ -998,6 +983,7 @@ class _TimerPageState extends State<TimerPage>
         body: _stack(
           host && wide
               ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Expanded(
                       child: !_idle
@@ -1057,12 +1043,6 @@ class _TimerPageState extends State<TimerPage>
                   alignment: WrapAlignment.center,
                   children: [
                     if (widget.sync != null)
-                      TextButton.icon(
-                        onPressed: _shareLink,
-                        icon: const Icon(Icons.qr_code),
-                        label: const Text('Viewer link'),
-                      ),
-                    if (widget.sync != null)
                       FilledButton(
                         onPressed:
                             _idle &&
@@ -1079,7 +1059,7 @@ class _TimerPageState extends State<TimerPage>
                                 _enter('draw');
                               }
                             : null,
-                        child: const Text('Start session'),
+                        child: const Text('Draw first team'),
                       ),
                     if (widget.sync != null && !_closed)
                       TextButton(
@@ -1102,32 +1082,12 @@ class _TimerPageState extends State<TimerPage>
                       ),
                     ],
                     if (widget.sync != null)
-                      FilledButton.icon(
-                        onPressed:
-                            (_idle &&
-                                remaining(_groups.length, _done).length >= 2 &&
-                                !_finished &&
-                                _stage.isEmpty)
-                            ? _spin
-                            : null,
-                        icon: const Icon(Icons.casino),
-                        label: const Text('Spin'),
-                      ),
-                    if (widget.sync != null)
                       OutlinedButton.icon(
                         onPressed: _idle && _stage.isEmpty
                             ? _breakDialog
                             : null,
                         icon: const Icon(Icons.free_breakfast),
                         label: const Text('Break'),
-                      ),
-                    if (widget.sync != null)
-                      OutlinedButton.icon(
-                        onPressed: _idle && _stage.isEmpty
-                            ? _setupDialog
-                            : null,
-                        icon: const Icon(Icons.swap_horiz),
-                        label: const Text('Setup'),
                       ),
                     if (_end == null)
                       FilledButton.icon(
@@ -1162,9 +1122,7 @@ class _TimerPageState extends State<TimerPage>
                     ],
                   ],
                 ),
-              if ((!widget.viewer || widget.notesSync != null) &&
-                  _groups.isNotEmpty)
-                _notesTile(),
+              if (!(host && wide) && _groups.isNotEmpty) _notesTile(),
               if (host && !wide) _sidePanel(),
             ],
           ),

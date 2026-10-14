@@ -259,7 +259,7 @@ class _AdminPageState extends State<AdminPage> {
     })
     m,
   ) {
-    final host = '${m.base}#/host/${m.edit}/${m.notes}/${m.read}/${m.profs}';
+    final host = '${m.base}#/host/${m.edit}/${m.notes}/${m.read}/${m.profs}/${m.jury}';
     final jury = '${m.base}#/jury/${m.jury}/${m.read}';
     final viewer = '${m.base}#/view/${m.read}';
     return [
@@ -275,6 +275,7 @@ class _AdminPageState extends State<AdminPage> {
                 notesSync: Sync(m.notes),
                 readToken: m.read,
                 profsSync: Sync(m.profs),
+                juryToken: m.jury,
               ),
             ),
           ),

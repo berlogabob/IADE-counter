@@ -53,7 +53,7 @@ class WheelPainter extends CustomPainter {
     if (n == 0) return;
     final s = (2 * pi) / n;
     final centre = Offset(size.width / 2, size.height / 2);
-    final radius = (min(size.width, size.height) / 2) - 4;
+    final radius = (min(size.width, size.height) / 2) - 16;
 
     final paint = Paint()..style = PaintingStyle.fill;
     final border = Paint()
@@ -81,13 +81,13 @@ class WheelPainter extends CustomPainter {
         );
     }
 
-    // Slice labels, drawn radially and centred in their slice.
+    // Slice labels, written along the radius from the centre outwards, so
+    // the name stays inside its slice at every angle.
+    final maxLen = radius * 0.85 - radius * 0.2;
     for (var i = 0; i < n; i++) {
       final mid = -pi / 2 + angle + (i + 0.5) * s;
-      final text = labels[i];
-      var fontSize = 60.0;
+      var fontSize = min(40.0, 2 * radius * sin(s / 2) * 0.5);
       TextPainter tp;
-      // Shrink the font until it fits inside the slice arc.
       do {
         tp = TextPainter(
           text: TextSpan(
@@ -96,22 +96,32 @@ class WheelPainter extends CustomPainter {
               fontWeight: FontWeight.bold,
               fontSize: fontSize,
             ),
-            text: text,
+            text: labels[i],
           ),
           textDirection: TextDirection.ltr,
-        )..layout();
+          maxLines: 1,
+          ellipsis: '…',
+        )..layout(maxWidth: maxLen);
         fontSize -= 2;
-      } while (tp.width > s * radius * 0.9 && fontSize > 8);
-      final textRadius = radius * 0.72;
-      final offset = Offset(
-        centre.dx + textRadius * cos(mid),
-        centre.dy + textRadius * sin(mid),
-      );
-      tp.paint(
-        canvas,
-        Offset(offset.dx - tp.width / 2, offset.dy - tp.height / 2),
-      );
+      } while (tp.didExceedMaxLines && fontSize > 8);
+      canvas
+        ..save()
+        ..translate(centre.dx, centre.dy)
+        ..rotate(mid)
+        ..translate(radius * 0.2, -tp.height / 2);
+      tp.paint(canvas, Offset.zero);
+      canvas.restore();
     }
+
+    // Fixed pointer above the top edge, tip pointing down into the slice.
+    canvas.drawPath(
+      Path()
+        ..moveTo(centre.dx - 14, centre.dy - radius - 12)
+        ..lineTo(centre.dx + 14, centre.dy - radius - 12)
+        ..lineTo(centre.dx, centre.dy - radius + 18)
+        ..close(),
+      Paint()..color = Colors.redAccent,
+    );
   }
 
   @override
