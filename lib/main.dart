@@ -918,7 +918,9 @@ class _TimerPageState extends State<TimerPage>
                                 _stage.isEmpty &&
                                 !_finished
                             ? () {
-                                _groups = parseRoster(_rosterCtl.text);
+                                if (_rosterCtl.text.trim().isNotEmpty) {
+                                  _groups = parseRoster(_rosterCtl.text);
+                                }
                                 _done.clear();
                                 _log.clear();
                                 _enter('draw');
