@@ -302,7 +302,13 @@ class _TimerPageState extends State<TimerPage>
   /// At least one so a group with no listed students still counts as one slot.
   int _maxStudents(Group g) => g.students.isEmpty ? 1 : g.students.length;
 
-  /// The current student's name within [group], or 'Student #n' when the roster
+  /// Who is presenting: the team name alone, plus the student when the group lists students.
+  String _who() {
+    final g = _groups[_gi];
+    return g.students.isEmpty ? g.name : '${g.name} · ${_studentNameInGroup()}';
+  }
+
+  /// The current student's name within the group, or 'Student #n' when the roster
   /// listed fewer students than are being presented.
   String _studentNameInGroup() {
     if (_groups.isEmpty) return 'Student #${_log.length + 1}';
@@ -317,8 +323,7 @@ class _TimerPageState extends State<TimerPage>
   String _logLine(int num, Duration talk, Duration total, Duration qa) {
     final base = logLine(num, talk, total, qa);
     if (_groups.isEmpty) return base;
-    final group = _groups[_gi];
-    final line = '${group.name} · $_studentNameInGroup()  $base';
+    final line = '${_who()}  $base';
     final d = _startDelta;
     if (d == null) return line;
     if (d == 0) return '$line start on time';
@@ -902,7 +907,7 @@ class _TimerPageState extends State<TimerPage>
         ? 'All done'
         : _groups.isEmpty
         ? 'Student #${_log.length + 1}'
-        : '${_groups[_gi].name} · ${_studentNameInGroup()}';
+        : _who();
     if (widget.viewer && widget.notesSync != null) return _juryScaffold(time);
     final clock = FittedBox(
       child: Text(
