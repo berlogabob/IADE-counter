@@ -109,6 +109,7 @@ class Snapshot {
     this.spinAtMs,
     this.spinWinner = 0,
     this.breakEndMs,
+    this.breakLabel = 'Break',
     this.rev = 0,
   });
 
@@ -147,6 +148,9 @@ class Snapshot {
   /// Epoch ms the break ends, or null when there is no break running.
   final int? breakEndMs;
 
+  /// Title of that countdown: 'Break' or 'Setup'.
+  final String breakLabel;
+
   /// Host increments on every push; viewer applies a snapshot only when it
   /// differs from the last one it applied.
   final int rev;
@@ -170,6 +174,7 @@ class Snapshot {
       spinAtMs == other.spinAtMs &&
       spinWinner == other.spinWinner &&
       breakEndMs == other.breakEndMs &&
+      breakLabel == other.breakLabel &&
       rev == other.rev;
 
   @override
@@ -189,6 +194,7 @@ class Snapshot {
     spinAtMs,
     spinWinner,
     breakEndMs,
+    breakLabel,
     rev,
   );
 
@@ -208,6 +214,7 @@ class Snapshot {
     'spinAtMs': spinAtMs,
     'spinWinner': spinWinner,
     'breakEndMs': breakEndMs,
+    'breakLabel': breakLabel,
     'rev': rev,
   };
 
@@ -231,6 +238,7 @@ class Snapshot {
     spinAtMs: json['spinAtMs'] as int?,
     spinWinner: json['spinWinner'] as int? ?? 0,
     breakEndMs: json['breakEndMs'] as int?,
+    breakLabel: json['breakLabel'] as String? ?? 'Break',
     rev: json['rev'] as int? ?? 0,
   );
 

@@ -10,10 +10,9 @@ const Duration holdMs = Duration(seconds: 3);
 
 /// How often the host repaints while a sync is active: 50 ms while the wheel
 /// spins so its animation stays smooth, otherwise 250 ms.
-Duration repaintInterval({required bool wheelActive}) =>
-    wheelActive
-        ? const Duration(milliseconds: 50)
-        : const Duration(milliseconds: 250);
+Duration repaintInterval({required bool wheelActive}) => wheelActive
+    ? const Duration(milliseconds: 50)
+    : const Duration(milliseconds: 250);
 
 /// The angle the wheel has rotated through for a fraction [t] of the spin.
 ///

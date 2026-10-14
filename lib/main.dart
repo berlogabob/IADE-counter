@@ -86,7 +86,8 @@ class _TimerPageState extends State<TimerPage>
   Timer? _pushTimer; // host: 5s push while running
   Timer? _notesTimer; // host: 2s debounce before writing notes
   Timer? _repaint; // sync mode: repaint so overlays follow the server clock
-  Timer? _spinEnd; // host: drop the repaint interval back to 250 ms after a spin
+  Timer?
+  _spinEnd; // host: drop the repaint interval back to 250 ms after a spin
   int _rev = -1; // viewer: last snapshot rev applied
 
   Duration _total = const Duration(minutes: 15);
@@ -118,6 +119,7 @@ class _TimerPageState extends State<TimerPage>
   int? _spinAtMs; // host: server ms the spin started
   int _spinWinner = 0; // host: group index the wheel stopped on
   int? _breakEndMs; // host: server ms the break ends
+  String _breakLabel = 'Break';
 
   bool get _idle => _end == null && _paused == null;
   Duration get _limit => _inQa ? _qa : _total;
@@ -371,7 +373,7 @@ class _TimerPageState extends State<TimerPage>
   }
 
   /// Host: set the break's end timestamp and push it.
-  void _breakStart() {
+  void _breakStart([String label = 'Break']) {
     if (!_idle) return;
     final minutes = _minutes(_breakCtl.text);
     if (minutes == null) {
@@ -379,8 +381,48 @@ class _TimerPageState extends State<TimerPage>
       return;
     }
     _breakEndMs = widget.sync!.nowMs() + minutes.inMilliseconds;
+    _breakLabel = label;
     _push();
     _ensureRepaint();
+  }
+
+  /// Host: setup slot between groups, 2 min x a coefficient, run as a labelled break.
+  void _setupDialog() {
+    if (!_idle) return;
+    var coef = 1.0;
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setLocal) => AlertDialog(
+          title: const Text('Setup between groups'),
+          content: Wrap(
+            spacing: 8,
+            children: [
+              for (final c in const [0.5, 1.0, 1.5, 2.0, 3.0])
+                ChoiceChip(
+                  label: Text('x$c = ${c * 2} min'),
+                  selected: coef == c,
+                  onSelected: (_) => setLocal(() => coef = c),
+                ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                _breakCtl.text = '${coef * 2}';
+                _breakStart('Setup');
+                Navigator.of(context).pop();
+              },
+              child: const Text('Start'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   /// Host: end the break so the overlay disappears everywhere.
@@ -411,6 +453,7 @@ class _TimerPageState extends State<TimerPage>
       spinAtMs: _spinAtMs,
       spinWinner: _spinWinner,
       breakEndMs: _breakEndMs,
+      breakLabel: _breakLabel,
       rev: DateTime.now()
           .millisecondsSinceEpoch, // unique per push, survives host reload
     );
@@ -491,6 +534,7 @@ class _TimerPageState extends State<TimerPage>
       _spinAtMs = s.spinAtMs;
       _spinWinner = s.spinWinner;
       _breakEndMs = s.breakEndMs;
+      _breakLabel = s.breakLabel;
       _paused = s.pausedMs == null ? null : Duration(milliseconds: s.pausedMs!);
       // shortcut: talk time before a Q&A is not stored, so a reload during Q&A
       // logs it as 0; store it in the snapshot if that matters.
@@ -510,7 +554,10 @@ class _TimerPageState extends State<TimerPage>
       final decoded = jsonDecode(raw);
       if (decoded is Map<String, dynamic>) {
         setState(() {
-          _notes = {...decoded.map((k, v) => MapEntry(k.toString(), v.toString())), ..._notes};
+          _notes = {
+            ...decoded.map((k, v) => MapEntry(k.toString(), v.toString())),
+            ..._notes,
+          };
         });
       }
     } catch (_) {
@@ -540,6 +587,7 @@ class _TimerPageState extends State<TimerPage>
         _spinAtMs = s.spinAtMs;
         _spinWinner = s.spinWinner;
         _breakEndMs = s.breakEndMs;
+        _breakLabel = s.breakLabel;
         _end = s.endMs == null
             ? null
             : DateTime.fromMillisecondsSinceEpoch(
@@ -624,9 +672,8 @@ class _TimerPageState extends State<TimerPage>
       ),
       if (kIsWeb && widget.sync == null)
         FilledButton.icon(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<void>(builder: (_) => const AdminPage()),
-          ),
+          onPressed: () => Navigator.of(context)
+              .push(MaterialPageRoute<void>(builder: (_) => const AdminPage())),
           icon: const Icon(Icons.add),
           label: const Text('New session'),
         ),
@@ -754,6 +801,12 @@ class _TimerPageState extends State<TimerPage>
                         onPressed: _idle ? _breakDialog : null,
                         icon: const Icon(Icons.free_breakfast),
                         label: const Text('Break'),
+                      ),
+                    if (widget.sync != null)
+                      OutlinedButton.icon(
+                        onPressed: _idle ? _setupDialog : null,
+                        icon: const Icon(Icons.swap_horiz),
+                        label: const Text('Setup'),
                       ),
                     if (_end == null)
                       FilledButton.icon(
@@ -885,7 +938,7 @@ class _TimerPageState extends State<TimerPage>
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Break',
+                          _breakLabel,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: side * 0.08,
@@ -912,7 +965,7 @@ class _TimerPageState extends State<TimerPage>
                     child: FilledButton.icon(
                       onPressed: _endBreak,
                       icon: const Icon(Icons.stop),
-                      label: const Text('End break'),
+                      label: Text('End ${_breakLabel.toLowerCase()}'),
                     ),
                   ),
               ],
