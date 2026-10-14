@@ -1,7 +1,7 @@
 // CORS proxy for Nextcloud: public-share WebDAV (the share token is the credential)
 // and the few admin calls the #/admin page needs (the caller's own Authorization header is forwarded; no secrets live here).
 const NC = 'https://nextcloud.soundingdoubts.pt';
-const ORIGINS = ['https://berlogabob.github.io', 'http://localhost:8080']; // shortcut: static allowlist, edit when the Pages URL changes
+const ORIGINS = ['https://berlogabob.github.io']; // shortcut: static allowlist, edit when the Pages URL changes
 const PUBLIC = /^\/public\.php\/dav\/files\/[A-Za-z0-9]+(\/[\w.\-\/]*)?$/;
 const ADMIN = [
   [/^\/ocs\/v2\.php\/apps\/files_sharing\/api\/v1\/shares(\/\d+)?$/, ['POST', 'GET', 'DELETE']],
