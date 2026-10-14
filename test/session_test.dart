@@ -3,7 +3,9 @@ import 'package:iade_counter/session.dart';
 
 void main() {
   test('parseRoute: jury needs exactly two alphanumeric tokens', () {
-    expect(parseRoute('/jury/abc/def'), (role: 'jury', tokens: ['abc', 'def']));
+    final r = parseRoute('/jury/abc/def');
+    expect(r.role, 'jury');
+    expect(r.tokens, ['abc', 'def']);
     expect(parseRoute('/jury/abc').role, 'standalone');
     expect(parseRoute('/jury/abc/d-f').role, 'standalone');
   });
