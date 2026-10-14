@@ -86,6 +86,7 @@ class _TimerPageState extends State<TimerPage>
   Timer? _pushTimer; // host: 5s push while running
   Timer? _notesTimer; // host: 2s debounce before writing notes
   Timer? _repaint; // sync mode: repaint so overlays follow the server clock
+  Timer? _spinEnd; // host: drop the repaint interval back to 250 ms after a spin
   int _rev = -1; // viewer: last snapshot rev applied
 
   Duration _total = const Duration(minutes: 15);
@@ -314,7 +315,6 @@ class _TimerPageState extends State<TimerPage>
       _paused = null;
       _inQa = false;
     });
-    _ensureRepaint(); // back to 250 ms now that the wheel is done
     _push();
   }
 
@@ -322,9 +322,7 @@ class _TimerPageState extends State<TimerPage>
   /// server clock. Faster while the wheel spins, so its animation stays smooth.
   void _ensureRepaint() {
     if (widget.sync == null) return;
-    final interval = _spinAtMs != null
-        ? const Duration(milliseconds: 50)
-        : const Duration(milliseconds: 250);
+    final interval = repaintInterval(wheelActive: _wheelActive);
     _repaint?.cancel();
     _repaint = Timer.periodic(interval, (_) => setState(() {}));
   }
@@ -339,6 +337,11 @@ class _TimerPageState extends State<TimerPage>
     _si = 0;
     _push();
     _ensureRepaint();
+    _spinEnd?.cancel();
+    _spinEnd = Timer(
+      spinMs + holdMs + const Duration(milliseconds: 200),
+      _ensureRepaint,
+    );
   }
 
   /// Host: offer to start a break via a minutes dialog.
@@ -548,19 +551,20 @@ class _TimerPageState extends State<TimerPage>
         _log
           ..clear()
           ..addAll(s.log);
-        if (_end != null || _paused != null) {
-          _ticker?.cancel();
-          _ticker = Timer.periodic(
-            const Duration(milliseconds: 200),
-            (_) => _tick(),
-          );
-          WakelockPlus.enable();
-        } else {
-          _ticker?.cancel();
-          _ticker = null;
-          WakelockPlus.disable();
-        }
       });
+      _ensureRepaint();
+      if (_end != null || _paused != null) {
+        _ticker?.cancel();
+        _ticker = Timer.periodic(
+          const Duration(milliseconds: 200),
+          (_) => _tick(),
+        );
+        WakelockPlus.enable();
+      } else {
+        _ticker?.cancel();
+        _ticker = null;
+        WakelockPlus.disable();
+      }
     });
   }
 
@@ -569,6 +573,7 @@ class _TimerPageState extends State<TimerPage>
     _ticker?.cancel();
     _sync?.cancel();
     _repaint?.cancel();
+    _spinEnd?.cancel();
     _pushTimer?.cancel();
     _notesTimer?.cancel();
     _blink.dispose();

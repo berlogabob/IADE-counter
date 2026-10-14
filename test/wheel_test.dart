@@ -34,6 +34,11 @@ void main() {
     }
   });
 
+  test('repaintInterval: 50 ms while active, 250 ms at rest', () {
+    expect(repaintInterval(wheelActive: true), const Duration(milliseconds: 50));
+    expect(repaintInterval(wheelActive: false), const Duration(milliseconds: 250));
+  });
+
   test('wheelAngle: monotonic and within one full turn', () {
     for (final n in [2, 5, 7]) {
       var prev = 0.0;
