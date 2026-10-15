@@ -57,6 +57,16 @@
     [#t.rank], [#t.name], [*#f1(t.avg)*], score-bar(t.avg))).flatten(),
 )
 
+// ---- score matrix ----
+= Score matrix
+#table(
+  columns: (1fr, ..d.raters.map(_ => auto), auto),
+  stroke: (top: none, left: none, right: none, bottom: 0.4pt + muted), inset: 5pt, align: (left, ..d.raters.map(_ => center), center),
+  table.header(strong[Team], ..d.raters.map(r => strong(r)), strong[Avg]),
+  ..d.teams.sorted(key: t => if t.rank == none { 99 } else { t.rank }).map(t => (
+    [#t.name], ..t.row.map(v => [#dash(v)]), [*#f1(t.avg)*])).flatten(),
+)
+
 // ---- timetable ----
 = Timetable
 #table(

@@ -21,6 +21,7 @@ export default {
     if (path === '/new' && req.method === 'POST' && ORIGINS.includes(origin)) return newSession(env, url, cors);
     if (path === '/join' && req.method === 'POST' && ORIGINS.includes(origin)) return join(env, url, cors);
     if (path === '/report' && req.method === 'GET' && ORIGINS.includes(origin)) return report(env, url, cors);
+    if (path === '/report-pdf' && req.method === 'PUT' && ORIGINS.includes(origin)) return uploadPdf(env, req, url, cors);
     if (path.includes('..') || !isPublic) return new Response('forbidden', { status: 403, headers: cors });
     const h = { 'Content-Type': req.headers.get('Content-Type') || 'application/json' };
     for (const k of ['If-None-Match', 'Depth']) if (req.headers.get(k)) h[k] = req.headers.get(k);
@@ -139,6 +140,29 @@ async function report(env, url, cors) {
     const list = await (await nc(dir, { method: 'PROPFIND', headers: { Depth: '1' } })).text();
     const files = [...new Set([...list.matchAll(/(notes(?:-[a-z0-9-]+)?\.json)/g)].map((m) => m[1]))];
     return json({ state: await get('state.json'), professors: (await get('professors.json')).names || [], notes: await Promise.all(files.map(get)) });
+  } catch (e) {
+    return json({ error: String(e.message || e) }, 502);
+  }
+}
+
+// Stores the generated report as report.pdf in the session folder. Same host-only token as /report.
+async function uploadPdf(env, req, url, cors) {
+  const json = (o, status = 200) =>
+    new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+  const auth = 'Basic ' + btoa(`${env.NC_USER}:${env.NC_PASS}`);
+  const nc = (path, init) => fetch(NC + path, { ...init, headers: { Authorization: auth, ...init.headers } });
+  const t = url.searchParams.get('t') || '';
+  if (!/^[A-Za-z0-9]+$/.test(t)) return json({ error: 'bad request' }, 400);
+  const pdf = await req.arrayBuffer();
+  if (pdf.byteLength > 5e6 || new TextDecoder().decode(pdf.slice(0, 4)) !== '%PDF') return json({ error: 'not a PDF or over 5 MB' }, 400);
+  try {
+    const all = (await (await nc('/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', { method: 'GET', headers: { 'OCS-APIRequest': 'true', Accept: 'application/json' } })).json())?.ocs?.data || [];
+    const p = all.find((x) => x.token === t && /^\/sessions\/s-[a-z0-9]+\/professors\.json$/.test(x.path));
+    if (!p) return json({ error: 'link expired or unknown' }, 404);
+    const file = p.path.replace(/professors\.json$/, 'report.pdf');
+    const r = await nc(`/remote.php/dav/files/${env.NC_USER}${file}`, { method: 'PUT', body: pdf, headers: { 'Content-Type': 'application/pdf' } });
+    if (![201, 204].includes(r.status)) return json({ error: `upload: HTTP ${r.status}` }, 502);
+    return json({ ok: true, path: file });
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);
   }
