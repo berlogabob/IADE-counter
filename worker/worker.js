@@ -61,8 +61,10 @@ async function newSession(env, url, cors) {
         headers: { 'OCS-APIRequest': 'true', Accept: 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
         body: `path=${encodeURIComponent(`/sessions/${name}/${file}`)}&shareType=3&permissions=${perm}&expireDate=${expire}`,
       });
-      const token = (await res.json())?.ocs?.data?.token;
-      if (res.status !== 200 || typeof token !== 'string') throw new Error(`share: HTTP ${res.status}`);
+      const raw = await res.text();
+      let token;
+      try { token = JSON.parse(raw)?.ocs?.data?.token; } catch (_) { /* reported below with the raw body */ }
+      if (res.status !== 200 || typeof token !== 'string') throw new Error(`share ${file}: HTTP ${res.status} ${raw.slice(0, 120)}`);
       return token;
     };
     return json({ edit: await share('state.json', 3), notes: await share('notes.json', 3), read: await share('state.json', 1), jury: await share('jury.json', 1), profs: await share('professors.json', 1) });
