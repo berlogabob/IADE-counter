@@ -106,6 +106,21 @@ for i, g in enumerate(st["groups"]):
         "obs": {**{k: round(v, 1) for k, v in obs.get(name, {}).items()}, **lg.get("dur", {})},
         "scores": scores, "avg": round(sum(vals) / len(vals), 1) if vals else None, "n": len(vals),
     })
+def sec(v):  # "mm:ss" or "hh:mm:ss" -> seconds, None when absent
+    if not v: return None
+    n = [int(x) for x in v.split(":")]
+    return n[0] * 3600 + n[1] * 60 + n[2] if len(n) == 3 else n[0] * 60 + n[1]
+import statistics
+for t in teams:
+    o = t["obs"]
+    t.update(talk_s=sec(t["talk"]), qa_s=sec(t["qa"]), over_s=sec(t["over"]) or 0,
+             t0=sec(t["t_talk"]), t1=sec(t["t_qa"]), t2=sec(t["t_end"]),
+             draw_s=round(o.get("draw", 0)), setup_s=round(o.get("setup", 0)), pack_s=round(o.get("pack", 0)))
+    dm = re.search(r"([+-]\d+)", t["delta"] or "")
+    t["delta_min"] = int(dm.group(1)) if dm else (0 if t["delta"] else None)
+    v = [x["score"] for x in t["scores"] if x["score"] is not None]
+    t["lo"], t["hi"] = (min(v), max(v)) if v else (None, None)
+    t["sd"] = round(statistics.pstdev(v), 1) if len(v) > 1 else None
 ranked = sorted((t for t in teams if t["avg"] is not None), key=lambda t: -t["avg"])
 for k, t in enumerate(ranked, 1):
     t["rank"] = k
@@ -117,7 +132,37 @@ raters = [n.get("_professor", "Professor") for n in notes]
 for t in teams:
     by = {sc["prof"]: sc["score"] for sc in t["scores"]}
     t["row"] = [by.get(x) for x in raters]
+lim_t, lim_q = st.get("totalMs", 0) // 1000, st.get("qaMs", 0) // 1000
+pres = [t for t in teams if t["presented"] and t["talk_s"] is not None]
+span = (max(t["t2"] for t in pres if t["t2"]) - min(t["t0"] - t["draw_s"] - t["setup_s"] for t in pres if t["t0"])) if any(t["t2"] for t in pres) else None
+dels = [t["delta_min"] for t in pres if t["delta_min"] is not None]
+full = [t for t in pres if lim_t and t["talk_s"] >= lim_t]
+skipt = [t for t in pres if "talk" in t["skipped"]]
+sdt = [t for t in ranked if t["sd"] is not None]
+insights = []
+if pres and lim_t:
+    insights.append(f"Presentations used on average {round(100 * sum(t['talk_s'] for t in pres) / len(pres) / lim_t)} % of the {lim_t // 60}:{lim_t % 60:02d} limit; {len(full)} ran to the limit, {len(skipt)} were ended early with Skip.")
+if dels:
+    avg = sum(dels) / len(dels)
+    insights.append(f"Start times averaged {abs(round(avg, 1))} min {'ahead of' if avg < 0 else 'behind'} the plan (range {min(dels):+d} to {max(dels):+d} min).")
+if ranked:
+    insights.append(f"Highest score: {ranked[0]['name']} ({ranked[0]['avg']}). Lowest: {ranked[-1]['name']} ({ranked[-1]['avg']}).")
+if sdt:
+    w = max(sdt, key=lambda t: t["hi"] - t["lo"])
+    insights.append(f"Widest disagreement between professors: {w['name']} (scores {w['lo']} to {w['hi']}).")
+if span and pres:
+    insights.append(f"The session took {span // 60}:{span % 60:02d} for {len(pres)} teams, {round(span / len(pres))} s per team including draw, setup and pack.")
+def stat(label, vals, limit):
+    vals = [v for v in vals if v is not None and v > 0]
+    return {"stage": label, "limit": limit or None, "n": len(vals), "avg": round(sum(vals) / len(vals)) if vals else None,
+            "min": min(vals) if vals else None, "max": max(vals) if vals else None}
+budget = [stat("Draw", [t["draw_s"] for t in pres], None),
+          stat("Setup", [t["setup_s"] for t in pres], st.get("setupMs", 0) // 1000),
+          stat("Talk", [t["talk_s"] for t in pres], lim_t),
+          stat("Q&A", [t["qa_s"] for t in pres], lim_q),
+          stat("Pack", [t["pack_s"] for t in pres], st.get("packMs", 0) // 1000)]
 data = {
+    "budget": budget, "span": span, "insights": insights, "n_skip_talk": len(skipt), "n_full": len(full), "spread": [ranked[0]["avg"], ranked[-1]["avg"]] if ranked else None,
     "raters": raters, "professors": r.get("professors", []), "teams": teams,
     "limits": {"talk": st.get("totalMs", 0) // 1000, "qa": st.get("qaMs", 0) // 1000,
                "setup": st.get("setupMs", 0) // 1000, "pack": st.get("packMs", 0) // 1000},
