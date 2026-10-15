@@ -10,6 +10,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import 'admin.dart';
+import 'report.dart';
 import 'loop.dart';
 import 'phase.dart';
 import 'session.dart';
@@ -32,6 +33,8 @@ void main() {
       theme: appTheme(),
       home: parsed.role == 'admin'
           ? const AdminPage()
+          : parsed.role == 'report'
+          ? ReportPage(token: parsed.tokens[0])
           : parsed.role == 'jury'
           ? JoinPage(juryToken: parsed.tokens[0], readToken: parsed.tokens[1])
           : parsed.tokens.isNotEmpty
@@ -664,30 +667,46 @@ class _TimerPageState extends State<TimerPage>
   }
 
   /// Viewer and professor invite links, side by side.
-  Widget _linksRow() => Row(
+  Widget _linksRow() => Column(
+    crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      Expanded(
-        child: OutlinedButton.icon(
-          onPressed: () => _showLink(
-            'Viewer link',
-            '/view/${widget.readToken ?? widget.sync!.token}',
+      Row(
+        children: [
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: () => _showLink(
+                'Viewer link',
+                '/view/${widget.readToken ?? widget.sync!.token}',
+              ),
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Viewer link'),
+            ),
           ),
-          icon: const Icon(Icons.qr_code),
-          label: const Text('Viewer link'),
-        ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton.icon(
+              onPressed: widget.juryToken == null
+                  ? null
+                  : () => _showLink(
+                      'Professor link',
+                      '/jury/${widget.juryToken}/${widget.readToken}',
+                    ),
+              icon: const Icon(Icons.qr_code),
+              label: const Text('Professor link'),
+            ),
+          ),
+        ],
       ),
-      const SizedBox(width: 8),
-      Expanded(
-        child: OutlinedButton.icon(
-          onPressed: widget.juryToken == null
-              ? null
-              : () => _showLink(
-                  'Professor link',
-                  '/jury/${widget.juryToken}/${widget.readToken}',
-                ),
-          icon: const Icon(Icons.qr_code),
-          label: const Text('Professor link'),
-        ),
+      const SizedBox(height: 8),
+      OutlinedButton.icon(
+        onPressed: widget.profsSync == null
+            ? null
+            : () => _showLink(
+                'Report link',
+                '/report/${widget.profsSync!.token}',
+              ),
+        icon: const Icon(Icons.assessment),
+        label: const Text('Report link'),
       ),
     ],
   );
@@ -1310,6 +1329,9 @@ class _TimerPageState extends State<TimerPage>
   // Reserved key in this professor's notes file; the report generator reads it.
   static const _profKey = '_professor';
 
+  /// Notes-file key prefix of a 0-9 score, e.g. '_score:Team A' -> '7'.
+  static const _scoreKey = '_score:';
+
   Widget _notesTile() {
     if (_profCtl.text != (_notes[_profKey] ?? '')) {
       _profCtl.text = _notes[_profKey] ?? '';
@@ -1330,18 +1352,42 @@ class _TimerPageState extends State<TimerPage>
     for (var i = 0; i < _groups.length; i++)
       Padding(
         padding: const EdgeInsets.only(top: 12),
-        child: TextFormField(
-          key: ValueKey('${_groups[i].name}|$_notesLoaded'),
-          initialValue: _notes[_groups[i].name] ?? '',
-          enabled: !_closed,
-          maxLines: 3,
-          keyboardType: TextInputType.multiline,
-          decoration: InputDecoration(
-            labelText:
-                '${_groups[i].name}${_done.contains(i) ? '  (done)' : ''}',
-            border: const OutlineInputBorder(),
-          ),
-          onChanged: (value) => _onNotesChanged(_groups[i].name, value),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(_groups[i].name),
+            Wrap(
+              spacing: 4,
+              children: [
+                for (var v = 0; v <= 9; v++)
+                  ChoiceChip(
+                    label: Text('$v'),
+                    visualDensity: VisualDensity.compact,
+                    selected: _notes['$_scoreKey${_groups[i].name}'] == '$v',
+                    onSelected: _closed
+                        ? null
+                        : (on) => _onNotesChanged(
+                            '$_scoreKey${_groups[i].name}',
+                            on ? '$v' : '',
+                          ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              key: ValueKey('${_groups[i].name}|$_notesLoaded'),
+              initialValue: _notes[_groups[i].name] ?? '',
+              enabled: !_closed,
+              maxLines: 3,
+              keyboardType: TextInputType.multiline,
+              decoration: InputDecoration(
+                labelText:
+                    '${_groups[i].name}${_done.contains(i) ? '  (done)' : ''}',
+                border: const OutlineInputBorder(),
+              ),
+              onChanged: (value) => _onNotesChanged(_groups[i].name, value),
+            ),
+          ],
         ),
       ),
     if (_closed)

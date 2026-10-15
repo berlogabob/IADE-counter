@@ -86,7 +86,10 @@ class _AdminPageState extends State<AdminPage> {
               children: [
                 SelectableText(_error),
                 const SizedBox(height: 16),
-                FilledButton(onPressed: _create, child: const Text('Try again')),
+                FilledButton(
+                  onPressed: _create,
+                  child: const Text('Try again'),
+                ),
               ],
             ),
     ),

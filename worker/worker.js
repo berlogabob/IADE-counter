@@ -20,6 +20,7 @@ export default {
     const isPublic = PUBLIC.test(path) && ['GET', 'PUT'].includes(req.method);
     if (path === '/new' && req.method === 'POST' && ORIGINS.includes(origin)) return newSession(env, url, cors);
     if (path === '/join' && req.method === 'POST' && ORIGINS.includes(origin)) return join(env, url, cors);
+    if (path === '/report' && req.method === 'GET' && ORIGINS.includes(origin)) return report(env, url, cors);
     if (path.includes('..') || !isPublic) return new Response('forbidden', { status: 403, headers: cors });
     const h = { 'Content-Type': req.headers.get('Content-Type') || 'application/json' };
     for (const k of ['If-None-Match', 'Depth']) if (req.headers.get(k)) h[k] = req.headers.get(k);
@@ -113,6 +114,29 @@ async function join(env, url, cors) {
     if (res.status !== 200 || typeof token !== 'string') return json({ error: `share: HTTP ${res.status}` }, 502);
     await addName();
     return json({ notes: token });
+  } catch (e) {
+    return json({ error: String(e.message || e) }, 502);
+  }
+}
+
+// Read-only summary of a session: state, professors and every notes file. The token is the
+// read-only professors.json share, which only the host holds.
+async function report(env, url, cors) {
+  const json = (o, status = 200) =>
+    new Response(JSON.stringify(o), { status, headers: { ...cors, 'Content-Type': 'application/json' } });
+  const auth = 'Basic ' + btoa(`${env.NC_USER}:${env.NC_PASS}`);
+  const nc = (path, init) => fetch(NC + path, { ...init, headers: { Authorization: auth, ...init.headers } });
+  const t = url.searchParams.get('t') || '';
+  if (!/^[A-Za-z0-9]+$/.test(t)) return json({ error: 'bad request' }, 400);
+  try {
+    const all = (await (await nc('/ocs/v2.php/apps/files_sharing/api/v1/shares?format=json', { method: 'GET', headers: { 'OCS-APIRequest': 'true', Accept: 'application/json' } })).json())?.ocs?.data || [];
+    const p = all.find((x) => x.token === t && /^\/sessions\/s-[a-z0-9]+\/professors\.json$/.test(x.path));
+    if (!p) return json({ error: 'link expired or unknown' }, 404);
+    const dir = `/remote.php/dav/files/${env.NC_USER}${p.path.replace(/professors\.json$/, '')}`;
+    const get = async (f) => { try { return await (await nc(dir + f, { method: 'GET', headers: {} })).json(); } catch (_) { return {}; } };
+    const list = await (await nc(dir, { method: 'PROPFIND', headers: { Depth: '1' } })).text();
+    const files = [...new Set([...list.matchAll(/(notes(?:-[a-z0-9-]+)?\.json)/g)].map((m) => m[1]))];
+    return json({ state: await get('state.json'), professors: (await get('professors.json')).names || [], notes: await Promise.all(files.map(get)) });
   } catch (e) {
     return json({ error: String(e.message || e) }, 502);
   }

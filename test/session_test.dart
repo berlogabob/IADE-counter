@@ -202,4 +202,9 @@ void main() {
     final r = s.remaining(800_000 + 10_000);
     expect(r, const Duration(seconds: 190));
   });
+  test('parseRoute: /report with one token', () {
+    final r = parseRoute('/report/AB12');
+    expect(r.role, 'report');
+    expect(r.tokens, ['AB12']);
+  });
 }

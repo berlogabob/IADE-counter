@@ -330,6 +330,12 @@ class Snapshot {
     return (role: 'jury', tokens: segments); // [notes, read]
   }
 
+  if (fragment.startsWith('/report/')) {
+    final token = fragment.substring('/report/'.length);
+    if (!tokenRe.hasMatch(token)) return (role: 'standalone', tokens: const []);
+    return (role: 'report', tokens: [token]);
+  }
+
   if (fragment.startsWith('/view/')) {
     final token = fragment.substring('/view/'.length);
     if (!tokenRe.hasMatch(token)) return (role: 'standalone', tokens: const []);
