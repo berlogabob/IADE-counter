@@ -1,0 +1,196 @@
+{
+ "state": {
+  "endMs": null,
+  "pausedMs": null,
+  "inQa": false,
+  "totalMs": 20000,
+  "warnMs": 6000,
+  "qaMs": 8000,
+  "student": 9,
+  "log": [
+   "MealMate \u00b7 Tiago Rocha  #1  talk 00:15  Q&A 00:04  [10:58:12 talk, 10:58:27 Q&A, 10:58:31 end] start -6 min",
+   "TuneTrail \u00b7 Nuno Pires  #2  talk 00:15  Q&A 00:03  [10:58:48 talk, 10:59:04 Q&A, 10:59:07 end] start -4 min",
+   "EcoRide \u00b7 Ines Cardoso  #3  talk 00:07  Q&A 00:04  [10:59:24 talk, 10:59:32 Q&A, 10:59:36 end] start -1 min",
+   "SafeWalk \u00b7 Pedro Neves  #4  talk 00:14  Q&A 00:03  [10:59:52 talk, 11:00:07 Q&A, 11:00:11 end] start -4 min",
+   "StudyBuddy \u00b7 Katia Sousa  #5  talk 00:07  Q&A 00:08  [11:00:27 talk, 11:00:34 Q&A, 11:00:42 end] start -1 min",
+   "PlantPal \u00b7 Filipe Gomes  #6  talk 00:10  Q&A 00:05  [11:00:59 talk, 11:01:09 Q&A, 11:01:15 end] start on time",
+   "SmartBin \u00b7 Ana Ferreira  #7  talk 00:20  Q&A 00:08  [11:01:31 talk, 11:01:51 Q&A, 11:01:59 end] start +3 min",
+   "CampusMap \u00b7 Diogo Martins  #8  talk 00:13  Q&A 00:04  [11:02:07 talk, 11:02:21 Q&A, 11:02:26 end] start +3 min"
+  ],
+  "groups": [
+   {
+    "name": "SmartBin",
+    "planned": "10:58",
+    "students": [
+     "Ana Ferreira",
+     "Bruno Lopes",
+     "Carla Dias"
+    ]
+   },
+   {
+    "name": "CampusMap",
+    "planned": "10:59",
+    "students": [
+     "Diogo Martins",
+     "Eva Pinto"
+    ]
+   },
+   {
+    "name": "PlantPal",
+    "planned": "11:00",
+    "students": [
+     "Filipe Gomes",
+     "Graca Teles",
+     "Hugo Reis"
+    ]
+   },
+   {
+    "name": "EcoRide",
+    "planned": "11:01",
+    "students": [
+     "Ines Cardoso",
+     "Joao Alves"
+    ]
+   },
+   {
+    "name": "StudyBuddy",
+    "planned": "11:02",
+    "students": [
+     "Katia Sousa",
+     "Luis Moreira",
+     "Marta Faria"
+    ]
+   },
+   {
+    "name": "TuneTrail",
+    "planned": "11:03",
+    "students": [
+     "Nuno Pires",
+     "Olga Silva"
+    ]
+   },
+   {
+    "name": "SafeWalk",
+    "planned": "11:04",
+    "students": [
+     "Pedro Neves",
+     "Rita Barros",
+     "Sofia Matos"
+    ]
+   },
+   {
+    "name": "MealMate",
+    "planned": "11:05",
+    "students": [
+     "Tiago Rocha",
+     "Vera Lima"
+    ]
+   }
+  ],
+  "gi": 1,
+  "finished": true,
+  "si": 0,
+  "spinAtMs": null,
+  "spinWinner": 1,
+  "breakEndMs": null,
+  "breakLabel": "Pack",
+  "closed": false,
+  "setupMs": 5000,
+  "packMs": 3000,
+  "stage": "",
+  "done": [
+   7,
+   5,
+   3,
+   6,
+   4,
+   2,
+   0,
+   1
+  ],
+  "rev": 1792058549073
+ },
+ "professors": [
+  "Dr Silva",
+  "Prof Costa",
+  "Dr Rocha"
+ ],
+ "notes": [
+  {
+   "_professor": "Host",
+   "MealMate": "Strong evidence from user tests.",
+   "_score:MealMate": "8",
+   "TuneTrail": "Good scope, weak validation.",
+   "_score:TuneTrail": "5",
+   "EcoRide": "Slides dense, speaker reading too much.",
+   "_score:EcoRide": "5",
+   "SafeWalk": "Clear problem statement and a convincing demo.",
+   "_score:SafeWalk": "7",
+   "StudyBuddy": "Idea is fine but the demo was rushed.",
+   "_score:StudyBuddy": "6",
+   "PlantPal": "Nice prototype, solid architecture.",
+   "_score:PlantPal": "9",
+   "SmartBin": "Good scope, weak validation.",
+   "_score:SmartBin": "4",
+   "CampusMap": "Answers were precise and confident.",
+   "_score:CampusMap": "7"
+  },
+  {
+   "_professor": "Dr Silva",
+   "MealMate": "Clear problem statement and a convincing demo. (technical depth)",
+   "_score:MealMate": "9",
+   "TuneTrail": "Some claims lack evidence. (technical depth)",
+   "_score:TuneTrail": "4",
+   "EcoRide": "Good scope, weak validation.",
+   "_score:EcoRide": "4",
+   "SafeWalk": "Well structured, good use of the time. (technical depth)",
+   "_score:SafeWalk": "8",
+   "StudyBuddy": "Slides dense, speaker reading too much. (technical depth)",
+   "_score:StudyBuddy": "4",
+   "PlantPal": "Strong evidence from user tests. (technical depth)",
+   "_score:PlantPal": "8",
+   "SmartBin": "Good scope, weak validation. (technical depth)",
+   "_score:SmartBin": "6",
+   "CampusMap": "Nice prototype, solid architecture. (technical depth)",
+   "_score:CampusMap": "8"
+  },
+  {
+   "_professor": "Prof Costa",
+   "MealMate": "Answers were precise and confident.",
+   "_score:MealMate": "9",
+   "TuneTrail": "Good scope, weak validation.",
+   "_score:TuneTrail": "6",
+   "EcoRide": "Idea is fine but the demo was rushed.",
+   "_score:EcoRide": "4",
+   "SafeWalk": "Clear problem statement and a convincing demo. (communication)",
+   "_score:SafeWalk": "9",
+   "StudyBuddy": "Problem unclear, demo failed. (communication)",
+   "_score:StudyBuddy": "2",
+   "PlantPal": "Strong evidence from user tests. (communication)",
+   "_score:PlantPal": "7",
+   "SmartBin": "Slides dense, speaker reading too much. (communication)",
+   "_score:SmartBin": "4",
+   "CampusMap": "Nice prototype, solid architecture. (communication)",
+   "_score:CampusMap": "8"
+  },
+  {
+   "_professor": "Dr Rocha",
+   "SafeWalk": "Q&A answers partly evasive. (business value)",
+   "_score:SafeWalk": "4",
+   "StudyBuddy": "Q&A answers partly evasive. (business value)",
+   "_score:StudyBuddy": "4",
+   "PlantPal": "Strong evidence from user tests. (business value)",
+   "_score:PlantPal": "7",
+   "SmartBin": "Problem unclear, demo failed. (business value)",
+   "_score:SmartBin": "3",
+   "CampusMap": "Strong evidence from user tests.",
+   "_score:CampusMap": "7",
+   "TuneTrail": "Some claims lack evidence.",
+   "_score:TuneTrail": "6",
+   "MealMate": "Nice prototype, solid architecture. (business value)",
+   "_score:MealMate": "9",
+   "EcoRide": "Q&A answers partly evasive.",
+   "_score:EcoRide": "6"
+  }
+ ]
+}

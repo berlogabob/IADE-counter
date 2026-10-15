@@ -48,3 +48,5 @@ app.*.map.json
 .widget_preview/
 .pi-runs/
 audit/
+report/data.json
+report/report.pdf
