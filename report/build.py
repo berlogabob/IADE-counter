@@ -1,6 +1,10 @@
 """Build the session report PDF (the main output) plus a scores CSV.
 
 usage: uv run python build.py [source] [phases.csv] [out.pdf]
+       uv run python build.py --all <sessions dir>     # rebuild report.pdf in every s-* folder
+
+--all works on the files themselves (state.json, professors.json, notes*.json), no network:
+run it where the Nextcloud data lives, e.g. `--all /nextcloud/sessions`, then `occ files:scan`.
 
 source is any of:
   - the host URL (https://berlogabob.github.io/IADE-counter/#/host/...), or a /report/ link
@@ -17,6 +21,16 @@ from datetime import datetime
 from pathlib import Path
 
 here = Path(__file__).parent
+if len(sys.argv) > 2 and sys.argv[1] == "--all":
+    done = skipped = 0
+    for d in sorted(Path(sys.argv[2]).glob("s-*")):
+        if not d.is_dir(): continue
+        r = subprocess.run([sys.executable, __file__, str(d), "/nonexistent.csv", str(d / "report.pdf")], capture_output=True, text=True)
+        ok = r.returncode == 0
+        done, skipped = done + ok, skipped + (not ok)
+        print(("rebuilt " if ok else "skipped ") + d.name, "" if ok else (r.stderr.strip().splitlines() or ["?"])[-1])
+    print(f"{done} rebuilt, {skipped} skipped")
+    sys.exit(0)
 W = "https://iade-sync.counter-iade.workers.dev"
 arg = sys.argv[1] if len(sys.argv) > 1 else str(here / "sample/report.json")
 phases_csv = Path(sys.argv[2]) if len(sys.argv) > 2 else here / "sample/phases.csv"
@@ -24,7 +38,14 @@ out = Path(sys.argv[3]) if len(sys.argv) > 3 else here / "out" / f"session-{date
 out.parent.mkdir(parents=True, exist_ok=True)
 
 def load(arg):
-    """Returns (data, token); token is None when the data came from a file."""
+    """Returns (data, token); token is None when the data came from a file or folder."""
+    if Path(arg).is_dir():  # a session folder as Nextcloud stores it
+        def rd(f):
+            try: return json.loads(f.read_text())
+            except Exception: return {}
+        d = Path(arg)
+        return {"state": rd(d / "state.json"), "professors": rd(d / "professors.json").get("names", []),
+                "notes": [rd(f) for f in sorted(d.glob("notes*.json"))]}, None
     if Path(arg).is_file():
         return json.loads(Path(arg).read_text()), None
     m = re.search(r"/host/[A-Za-z0-9]+/[A-Za-z0-9]+/[A-Za-z0-9]+/([A-Za-z0-9]+)", arg) or re.search(r"/report/([A-Za-z0-9]+)", arg)
@@ -36,6 +57,8 @@ def load(arg):
 
 r, token = load(arg)
 st, notes = r["state"], r["notes"]
+if not st.get("groups"):
+    sys.exit("no teams in this session")
 LINE = re.compile(
     r"^(?P<who>.+?)\s+#(?P<n>\d+)\s+talk (?P<talk>\d\d:\d\d)(?: \(\+(?P<over>[\d:]+)\))?"
     r"(?:\s+Q&A (?P<qa>\d\d:\d\d))?"
