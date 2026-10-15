@@ -1283,26 +1283,33 @@ class _TimerPageState extends State<TimerPage>
                       colourB: theme.colorScheme.tertiary,
                     ),
                   ),
-                  if (!spinning)
-                    Padding(
-                      padding: EdgeInsets.only(top: side * 0.08),
-                      child: Text(
-                        _groups[_spinWinner].name,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: side * 0.1,
-                          fontWeight: FontWeight.bold,
+                  // Always laid out, only hidden while spinning: adding it at the
+                  // reveal re-centred the column and made the wheel jump.
+                  Opacity(
+                    opacity: spinning ? 0 : 1,
+                    child: Column(
+                      children: [
+                        Padding(
+                          padding: EdgeInsets.only(top: side * 0.08),
+                          child: Text(
+                            _groups[_spinWinner].name,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: side * 0.1,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                      ),
+                        Text(
+                          '${pool.labels.length - 1} left',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: side * 0.04,
+                          ),
+                        ),
+                      ],
                     ),
-                  if (!spinning)
-                    Text(
-                      '${pool.labels.length - 1} left',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: side * 0.04,
-                      ),
-                    ),
+                  ),
                 ],
               ),
             );
