@@ -66,7 +66,7 @@
   ..d.teams.filter(t => t.order != none).sorted(key: t => t.order).map(t => (
     [#t.order], [#t.name], [#t.planned],
     [#dash(t.t_talk)#if t.delta != none [ \ #text(8pt, fill: muted)[#t.delta]]],
-    [#dash(t.talk)#if t.over != none [ #text(8pt, fill: red)[+#t.over]]], [#dash(t.qa)], [#dash(t.t_end)])).flatten(),
+    [#dash(t.talk)#if t.over != none [ #text(8pt, fill: red)[+#t.over]]#if "talk" in t.skipped [ #text(8pt, fill: muted)[skipped]]], [#dash(t.qa)#if "qa" in t.skipped [ #text(8pt, fill: muted)[skipped]]], [#dash(t.t_end)])).flatten(),
 )
 
 #if d.teams.any(t => t.obs.len() > 0) [

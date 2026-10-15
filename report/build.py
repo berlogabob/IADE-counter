@@ -24,11 +24,19 @@ LINE = re.compile(
     r"(?:\s+Q&A (?P<qa>\d\d:\d\d))?"
     r"(?:\s+\[(?P<t1>[\d:]+) talk(?:, (?P<t2>[\d:]+) Q&A)?, (?P<t3>[\d:]+) end\])?"
     r"(?:\s+start (?P<delta>.+))?$")
+SUFFIX = re.compile(r"\s*\{([^}]*)\}$")  # {draw 8, setup 5, pack 3; skipped talk, qa}
 logs = {}
 for line in st.get("log", []):
+    sm = SUFFIX.search(line)
+    extra = sm.group(1) if sm else ""
+    line = SUFFIX.sub("", line)
     m = LINE.match(line)
     if m:
-        logs[m["who"].split(" · ")[0]] = m.groupdict()
+        g = m.groupdict()
+        durs, _, skipped = extra.partition(";")
+        g["dur"] = {k: int(v) for k, v in re.findall(r"(draw|setup|pack) (\d+)", durs)}
+        g["skipped"] = [x.strip() for x in skipped.replace("skipped", "").split(",") if x.strip()]
+        logs[m["who"].split(" · ")[0]] = g
 
 obs = defaultdict(lambda: defaultdict(float))  # team -> stage -> seconds
 if phases_csv.exists():
@@ -53,7 +61,9 @@ for i, g in enumerate(st["groups"]):
         "presented": i in order, "order": order.get(i),
         "talk": lg.get("talk"), "over": lg.get("over"), "qa": lg.get("qa"),
         "t_talk": lg.get("t1"), "t_qa": lg.get("t2"), "t_end": lg.get("t3"), "delta": lg.get("delta"),
-        "obs": {k: round(v, 1) for k, v in obs.get(name, {}).items()},
+        "skipped": lg.get("skipped", []),
+        # app-logged seconds win over the flight recorder's polled ones
+        "obs": {**{k: round(v, 1) for k, v in obs.get(name, {}).items()}, **lg.get("dur", {})},
         "scores": scores, "avg": round(sum(vals) / len(vals), 1) if vals else None, "n": len(vals),
     })
 ranked = sorted((t for t in teams if t["avg"] is not None), key=lambda t: -t["avg"])

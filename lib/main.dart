@@ -132,6 +132,13 @@ class _TimerPageState extends State<TimerPage>
   DateTime?
   _talkAt; // host: wall clock when this presentation and its Q&A began
   DateTime? _qaAt;
+  // Host: loop stage timing for the log line of the current presenter.
+  DateTime? _stageAt;
+  final _durs = <String, int>{}; // whole seconds per finished stage
+  final _skipped = <String>{}; // stages the host cut short with Skip
+  int _logIdx =
+      -1; // index of the presenter's log line, finished when pack ends
+  String _logBase = '';
   // ponytail: in memory only, lost when the app closes; persist to a file or
   // shared_preferences if the log must survive a restart.
   final _log = <String>[];
@@ -399,14 +406,55 @@ class _TimerPageState extends State<TimerPage>
     hasPack: _packMs > 0,
   );
 
-  void _enter(String stage) {
+  static String _shown(String line) =>
+      line.replaceFirst(RegExp(r'\s*\{[^}]*\}$'), '');
+
+  /// ` {draw 8, setup 5, pack 3; skipped talk, qa}`: the durations and cut-short stages of this presenter.
+  String _stageSuffix() {
+    final parts = [
+      for (final k in ['draw', 'setup', 'pack'])
+        if (_durs.containsKey(k)) '$k ${_durs[k]}',
+    ];
+    final skip = [
+      'draw',
+      'setup',
+      'talk',
+      'qa',
+      'pack',
+    ].where(_skipped.contains);
+    if (parts.isEmpty && skip.isEmpty) return '';
+    return ' {${parts.join(', ')}${skip.isEmpty ? '' : '; skipped ${skip.join(', ')}'}}';
+  }
+
+  void _enter(String stage, {bool skip = false}) {
     if (widget.sync == null || widget.viewer) return;
+    final now = DateTime.now();
+    if (_stage.isNotEmpty && _stageAt != null) {
+      _durs[_stage] = now.difference(_stageAt!).inSeconds;
+      if (skip) _skipped.add(_stage);
+      if (_stage == 'pack' && _logIdx >= 0 && _logIdx < _log.length) {
+        _log[_logIdx] =
+            _logBase + _stageSuffix(); // pack is over: complete the line
+        _logIdx = -1;
+        _durs.clear();
+        _skipped.clear();
+      }
+    }
+    _stageAt = now;
     // A disabled pack still completes and logs the presenter before drawing.
     if (stage == 'pack' ||
         (stage == 'draw' && (_stage == 'talk' || _stage == 'qa'))) {
       final talk = _inQa ? _talkTaken : _total - _remaining;
       final qa = _inQa ? _qa - _remaining : Duration.zero;
-      _log.add(_logLine(_log.length + 1, talk, _total, qa));
+      _logBase = _logLine(_log.length + 1, talk, _total, qa);
+      _log.add(_logBase + _stageSuffix());
+      _logIdx = _log.length - 1;
+      if (stage == 'draw') {
+        // no pack stage: the line is final
+        _logIdx = -1;
+        _durs.clear();
+        _skipped.clear();
+      }
       _done.add(_gi);
       _startDelta = null;
       _reset();
@@ -967,7 +1015,7 @@ class _TimerPageState extends State<TimerPage>
           ),
         ),
       if (_log.isNotEmpty) ...[
-        Text(_log.join('\n')),
+        Text(_log.map(_shown).join('\n')),
         Wrap(
           children: [
             TextButton(
@@ -1110,12 +1158,15 @@ class _TimerPageState extends State<TimerPage>
                       ),
                     if (widget.sync != null && _stage.isNotEmpty) ...[
                       OutlinedButton(
-                        onPressed: () => _enter(_nextStage),
+                        onPressed: () => _enter(_nextStage, skip: true),
                         child: const Text('Skip'),
                       ),
                       TextButton(
                         onPressed: () {
                           _stage = '';
+                          _logIdx = -1;
+                          _durs.clear();
+                          _skipped.clear();
                           _spinAtMs = null;
                           _breakEndMs = null;
                           _reset();
@@ -1330,7 +1381,7 @@ class _TimerPageState extends State<TimerPage>
   /// viewers (who never see the setup fields or buttons).
   Widget _logBlock() {
     if (_log.isEmpty) return const SizedBox.shrink();
-    return Text(_log.join('\n'));
+    return Text(_log.map(_shown).join('\n'));
   }
 
   /// The host's log plus the current group's notes, for 'Copy log'.
