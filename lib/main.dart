@@ -129,6 +129,9 @@ class _TimerPageState extends State<TimerPage>
   bool _inQa = false;
   bool _silent = false;
   Duration _talkTaken = Duration.zero;
+  DateTime?
+  _talkAt; // host: wall clock when this presentation and its Q&A began
+  DateTime? _qaAt;
   // ponytail: in memory only, lost when the app closes; persist to a file or
   // shared_preferences if the log must survive a restart.
   final _log = <String>[];
@@ -222,6 +225,7 @@ class _TimerPageState extends State<TimerPage>
   }
 
   void _start() {
+    if (!_inQa) _talkAt ??= DateTime.now();
     if (_idle) {
       final total = _minutes(_totalCtl.text);
       final warn = _minutes(_warnCtl.text);
@@ -288,6 +292,7 @@ class _TimerPageState extends State<TimerPage>
   }
 
   void _startQa() {
+    _qaAt = DateTime.now();
     _talkTaken = _total - _remaining;
     _stopEffects();
     _inQa = true;
@@ -337,9 +342,21 @@ class _TimerPageState extends State<TimerPage>
   /// The host's log line, prefixed with `'<group> · <student>'` when a roster
   /// is loaded, with the start offset appended for the group's first student.
   String _logLine(int num, Duration talk, Duration total, Duration qa) {
-    final base = logLine(num, talk, total, qa);
-    if (_groups.isEmpty) return base;
-    final line = '${_who()}  $base';
+    // Whole seconds elapsed: the countdown format rounds up, which turned a full 12 s talk into 13 s (+1).
+    final base = logLine(
+      num,
+      Duration(seconds: talk.inSeconds),
+      total,
+      Duration(seconds: qa.inSeconds),
+    );
+    String hms(DateTime t) => t.toString().substring(11, 19);
+    final times = _talkAt == null
+        ? ''
+        : '  [${hms(_talkAt!)} talk'
+              '${_qaAt == null ? '' : ', ${hms(_qaAt!)} Q&A'}'
+              ', ${hms(DateTime.now())} end]';
+    if (_groups.isEmpty) return '$base$times';
+    final line = '${_who()}  $base$times';
     final d = _startDelta;
     if (d == null) return line;
     if (d == 0) return '$line start on time';
@@ -351,6 +368,8 @@ class _TimerPageState extends State<TimerPage>
     WakelockPlus.disable();
     _pushTimer?.cancel();
     _stopEffects();
+    _talkAt = null;
+    _qaAt = null;
     setState(() {
       _end = null;
       _paused = null;
@@ -1020,7 +1039,7 @@ class _TimerPageState extends State<TimerPage>
                     ),
                   ],
                 )
-              : (widget.viewer || !_idle)
+              : (widget.viewer || !_idle) && !(host && !wide)
               ? SizedBox.expand(child: child)
               : Center(child: SingleChildScrollView(child: child)),
         ),
@@ -1029,7 +1048,7 @@ class _TimerPageState extends State<TimerPage>
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
-            mainAxisSize: (_idle && !widget.viewer)
+            mainAxisSize: ((_idle || (host && !wide)) && !widget.viewer)
                 ? MainAxisSize.min
                 : MainAxisSize.max,
             children: [
@@ -1049,10 +1068,13 @@ class _TimerPageState extends State<TimerPage>
                     fontSize: MediaQuery.sizeOf(context).shortestSide * 0.06,
                   ),
                 ),
-              if (widget.viewer || !_idle)
+              if (widget.viewer || (!_idle && !(host && !wide)))
                 Expanded(child: clock)
               else
-                SizedBox(height: 140, child: clock),
+                SizedBox(
+                  height: _idle ? 140 : MediaQuery.sizeOf(context).height * 0.3,
+                  child: clock,
+                ),
               if (_idle && !widget.viewer) _setup(),
               const SizedBox(height: 16),
               if (widget.viewer) _logBlock(),

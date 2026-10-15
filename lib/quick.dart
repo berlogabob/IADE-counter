@@ -157,6 +157,9 @@ class _QuickPageState extends State<QuickPage> {
     final running = _cycle != null;
     final warning = running && _cycle!.warning(_stage, _remaining);
     return Scaffold(
+      appBar: running
+          ? null
+          : AppBar(backgroundColor: Colors.transparent, elevation: 0),
       backgroundColor: !running
           ? calmColor
           : warning
