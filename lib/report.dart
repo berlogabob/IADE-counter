@@ -108,7 +108,7 @@ class _ReportPageState extends State<ReportPage> {
     await launchUrl(
       Uri.parse(
         'mailto:${Uri.encodeComponent(address)}'
-        '?subject=${Uri.encodeComponent('Defence session report')}'
+        '?subject=${Uri.encodeComponent('Session report')}'
         '&body=${Uri.encodeComponent(body)}',
       ),
     );

@@ -9,7 +9,7 @@
 // Title, one line of context, then six key numbers.
 #let header(d) = {
   grid(columns: (1fr, auto), align: (left + bottom, right + bottom),
-    text(17pt, weight: "bold", fill: accent)[Defence session report],
+    text(17pt, weight: "bold", fill: accent)[Session report],
     text(8pt, fill: muted)[#if d.first != none [#d.first -- #d.last]])
   v(0.5mm)
   text(8pt, fill: muted)[Professors: #if d.professors.len() > 0 [#d.professors.join(", ")] else [-]

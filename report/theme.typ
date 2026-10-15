@@ -36,7 +36,7 @@
 
 #let doc(body) = {
   set page(paper: "a4", margin: (x: 14mm, top: 14mm, bottom: 16mm),
-    footer: context text(7pt, fill: muted)[Defence session report #h(1fr)
+    footer: context text(7pt, fill: muted)[Session report #h(1fr)
       #counter(page).display() / #counter(page).final().first()])
   set text(font: ("Helvetica Neue", "Helvetica", "Arial"), size: 8.5pt, fill: ink)
   set par(leading: 0.5em, spacing: 0.6em)
