@@ -1419,6 +1419,51 @@ class _TimerPageState extends State<TimerPage>
     return ExpansionTile(title: const Text('Notes'), children: _noteFields());
   }
 
+  /// 0-9 score chips bound to a notes-file key.
+  Widget _scoreChips(String key) => Wrap(
+    spacing: 4,
+    children: [
+      for (var v = 0; v <= 9; v++)
+        ChoiceChip(
+          label: Text('$v'),
+          visualDensity: VisualDensity.compact,
+          selected: _notes[key] == '$v',
+          onSelected: _closed
+              ? null
+              : (on) => _onNotesChanged(key, on ? '$v' : ''),
+        ),
+    ],
+  );
+
+  /// Personal score and note of one student: keys 'team/student' (note) and
+  /// '_score:team/student'. Separate from the team's own grade.
+  Widget _studentFields(String team, String student) {
+    final id = '${team.replaceAll('/', '')}/${student.replaceAll('/', '')}';
+    return Padding(
+      padding: const EdgeInsets.only(top: 12, left: 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(student),
+          _scoreChips('$_scoreKey$id'),
+          const SizedBox(height: 8),
+          TextFormField(
+            key: ValueKey('$id|$_notesLoaded'),
+            initialValue: _notes[id] ?? '',
+            enabled: !_closed,
+            maxLines: 2,
+            keyboardType: TextInputType.multiline,
+            decoration: InputDecoration(
+              labelText: student,
+              border: const OutlineInputBorder(),
+            ),
+            onChanged: (value) => _onNotesChanged(id, value),
+          ),
+        ],
+      ),
+    );
+  }
+
   /// Your name plus one editable note per presenter, all locked once the host closes the session.
   List<Widget> _noteFields() => [
     TextField(
@@ -1436,23 +1481,7 @@ class _TimerPageState extends State<TimerPage>
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(_groups[i].name),
-            Wrap(
-              spacing: 4,
-              children: [
-                for (var v = 0; v <= 9; v++)
-                  ChoiceChip(
-                    label: Text('$v'),
-                    visualDensity: VisualDensity.compact,
-                    selected: _notes['$_scoreKey${_groups[i].name}'] == '$v',
-                    onSelected: _closed
-                        ? null
-                        : (on) => _onNotesChanged(
-                            '$_scoreKey${_groups[i].name}',
-                            on ? '$v' : '',
-                          ),
-                  ),
-              ],
-            ),
+            _scoreChips('$_scoreKey${_groups[i].name}'),
             const SizedBox(height: 8),
             TextFormField(
               key: ValueKey('${_groups[i].name}|$_notesLoaded'),
@@ -1467,6 +1496,8 @@ class _TimerPageState extends State<TimerPage>
               ),
               onChanged: (value) => _onNotesChanged(_groups[i].name, value),
             ),
+            for (final st in _groups[i].students)
+              _studentFields(_groups[i].name, st),
           ],
         ),
       ),

@@ -26,6 +26,14 @@
           text(weight: "bold")[#dash(s.score)], text(fill: muted)[#s.prof], [#s.note])
         v(0.5mm)
       }
+      for g in t.student_grades.filter(g => g.scores.len() > 0) {
+        text(7.5pt, weight: "bold")[#g.name #text(fill: accent)[#f1(g.avg)]]
+        linebreak()
+        for s in g.scores.filter(s => s.note != "") {
+          text(7.5pt)[#text(fill: muted)[#s.prof:] #s.note]
+          linebreak()
+        }
+      }
     })
   }))
 }

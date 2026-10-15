@@ -133,7 +133,11 @@
    "SmartBin": "Good scope, weak validation.",
    "_score:SmartBin": "4",
    "CampusMap": "Answers were precise and confident.",
-   "_score:CampusMap": "7"
+   "_score:CampusMap": "7",
+   "SmartBin/Ana Ferreira": "Clear delivery, answered Q&A well.",
+   "_score:SmartBin/Ana Ferreira": "8",
+   "_score:SmartBin/Bruno Lopes": "6",
+   "SmartBin/Bruno Lopes": "Barely spoke."
   },
   {
    "_professor": "Dr Silva",
@@ -152,7 +156,9 @@
    "SmartBin": "Good scope, weak validation. (technical depth)",
    "_score:SmartBin": "6",
    "CampusMap": "Nice prototype, solid architecture. (technical depth)",
-   "_score:CampusMap": "8"
+   "_score:CampusMap": "8",
+   "_score:SmartBin/Ana Ferreira": "9",
+   "_score:SmartBin/Bruno Lopes": "5"
   },
   {
    "_professor": "Prof Costa",

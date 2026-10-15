@@ -95,6 +95,16 @@ for i, g in enumerate(st["groups"]):
         if text or sc != "":
             scores.append({"prof": n.get("_professor", "Professor"), "score": int(sc) if sc != "" else None, "note": text})
     vals = [s["score"] for s in scores if s["score"] is not None]
+    studs = []  # personal grades, graded separately from the team: keys "team/student", "_score:team/student"
+    for stu in g.get("students", []):
+        sid = f"{name.replace('/', '')}/{stu.replace('/', '')}"
+        ss = []
+        for n in notes:
+            text, sc = n.get(sid, "").strip(), n.get(f"_score:{sid}", "")
+            if text or sc != "":
+                ss.append({"prof": n.get("_professor", "Professor"), "score": int(sc) if sc != "" else None, "note": text})
+        sv = [x["score"] for x in ss if x["score"] is not None]
+        studs.append({"name": stu, "scores": ss, "avg": round(sum(sv) / len(sv), 1) if sv else None})
     lg = logs.get(name, {})
     teams.append({
         "name": name, "students": g.get("students", []), "planned": g.get("planned", ""),
@@ -104,7 +114,7 @@ for i, g in enumerate(st["groups"]):
         "skipped": lg.get("skipped", []),
         # app-logged seconds win over the flight recorder's polled ones
         "obs": {**{k: round(v, 1) for k, v in obs.get(name, {}).items()}, **lg.get("dur", {})},
-        "scores": scores, "avg": round(sum(vals) / len(vals), 1) if vals else None, "n": len(vals),
+        "student_grades": studs, "scores": scores, "avg": round(sum(vals) / len(vals), 1) if vals else None, "n": len(vals),
     })
 def sec(v):  # "mm:ss" or "hh:mm:ss" -> seconds, None when absent
     if not v: return None
@@ -132,6 +142,9 @@ raters = [n.get("_professor", "Professor") for n in notes]
 for t in teams:
     by = {sc["prof"]: sc["score"] for sc in t["scores"]}
     t["row"] = [by.get(x) for x in raters]
+    for sg in t["student_grades"]:
+        sby = {sc["prof"]: sc["score"] for sc in sg["scores"]}
+        sg["row"] = [sby.get(x) for x in raters]
 lim_t, lim_q = st.get("totalMs", 0) // 1000, st.get("qaMs", 0) // 1000
 pres = [t for t in teams if t["presented"] and t["talk_s"] is not None]
 span = (max(t["t2"] for t in pres if t["t2"]) - min(t["t0"] - t["draw_s"] - t["setup_s"] for t in pres if t["t0"])) if any(t["t2"] for t in pres) else None
